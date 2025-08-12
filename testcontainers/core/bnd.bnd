@@ -1,0 +1,52 @@
+#*******************************************************************************
+# Copyright (c)  2004 Contributors to the Eclipse Foundation
+#
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+#   Contributors:
+#  SmartCity Jena - initial
+#  Stefan Bischof (bipolis.org) - initial
+#*******************************************************************************
+
+-metainf-services: auto
+
+Export-Package: \
+    !org.testcontainers.shaded*,\
+    com.github.dockerjava.api*,\
+    org.testcontainers*
+
+-includeresource: \
+    @testcontainers-1.21.3.jar,\
+    @duct-tape-1.0.8.jar,\
+    @docker-java-api-3.4.2.jar,\
+    @docker-java-transport-3.4.2.jar,\
+    @docker-java-transport-zerodep-3.4.2.jar
+
+DynamicImport-Package: *
+
+-privatepackage: \
+    org.rnorth.ducttape*,\
+    com.fasterxml.jackson.annotation*,\
+    org.junit.rules*,\
+    org.junit.runners*,\
+    org.hamcrest*,\
+    org.apache.commons.compress,\
+    com.github.dockerjava.zerodep*
+
+Import-Package: \
+    !android.os.*,\
+    !com.github.dockerjava*,\
+    !com.google.appengine.*,\
+    !com.google.apphosting.*,\
+    !com.google.cloud.*,\
+    !io.r2dbc.*,\
+    !javax.annotation.*, \
+    !org.conscrypt, \
+    !org.testcontainers.r2dbc.*, \
+    !org.junit*,\
+    !sun.nio.ch*,\
+    *
