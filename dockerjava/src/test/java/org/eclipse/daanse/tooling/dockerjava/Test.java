@@ -13,6 +13,8 @@
  */
 package org.eclipse.daanse.tooling.dockerjava;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 
 import com.github.dockerjava.api.DockerClient;
@@ -37,7 +39,8 @@ public class Test {
         dc.pingCmd().exec();
 
         Info i = dc.infoCmd().exec();
-        System.out.println(i);
+
+        assertThat(i.getMemTotal()).isNotNull();
         System.out.println(i);
     }
 }
