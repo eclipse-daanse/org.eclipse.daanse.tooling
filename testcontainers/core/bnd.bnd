@@ -16,15 +16,11 @@
 
 Export-Package: \
     !org.testcontainers.shaded*,\
-    com.github.dockerjava.api*,\
     org.testcontainers*
 
 -includeresource: \
     @testcontainers-1.21.3.jar,\
-    @duct-tape-1.0.8.jar,\
-    @docker-java-api-3.4.2.jar,\
-    @docker-java-transport-3.4.2.jar,\
-    @docker-java-transport-zerodep-3.4.2.jar
+    @duct-tape-1.0.8.jar
 
 DynamicImport-Package: *
 
@@ -34,12 +30,10 @@ DynamicImport-Package: *
     org.junit.rules*,\
     org.junit.runners*,\
     org.hamcrest*,\
-    org.apache.commons.compress,\
-    com.github.dockerjava.zerodep*
+    org.apache.commons.compress
 
 Import-Package: \
     !android.os.*,\
-    !com.github.dockerjava*,\
     !com.google.appengine.*,\
     !com.google.apphosting.*,\
     !com.google.cloud.*,\
@@ -49,4 +43,5 @@ Import-Package: \
     !org.testcontainers.r2dbc.*, \
     !org.junit*,\
     !sun.nio.ch*,\
+    com.github.dockerjava*,\
     *

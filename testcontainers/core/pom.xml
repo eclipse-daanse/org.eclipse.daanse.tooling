@@ -21,8 +21,18 @@
   </parent>
   <artifactId>org.eclipse.daanse.tooling.testcontainers.core</artifactId>
 
+  <name>Eclipse Daanse Testcontainers Core</name>
+  <description>Core Testcontainers module providing Docker container testing
+    capabilities</description>
 
   <dependencies>
+
+    <dependency>
+      <groupId>org.eclipse.daanse</groupId>
+      <artifactId>org.eclipse.daanse.tooling.dockerjava</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>

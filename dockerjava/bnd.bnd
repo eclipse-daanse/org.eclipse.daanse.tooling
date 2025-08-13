@@ -1,0 +1,40 @@
+#*******************************************************************************
+# Copyright (c)  2004 Contributors to the Eclipse Foundation
+#
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+#
+#   Contributors:
+#    SmartCity Jena - initial
+#    Stefan Bischof (bipolis.org) - initial
+#*******************************************************************************
+
+Export-Package: \
+    com.github.dockerjava.api*,\
+    com.github.dockerjava.core*,\
+    com.github.dockerjava.transport*,\
+    com.github.dockerjava.zerodep*,\
+    com.github.dockerjava.httpclient5
+
+-includeresource: \
+    @docker-java-api-3.5.3.jar, \
+    @docker-java-transport-zerodep-3.5.3.jar, \
+    @docker-java-transport-3.5.3.jar
+
+
+-privatepackage: \
+    com.fasterxml.jackson.databind*,\
+    com.fasterxml.jackson.core*,\
+    com.fasterxml.jackson.annotation*,\
+    org.apache.commons.io*,\
+    org.apache.commons.lang3*,\
+    com.google.common.collect*,\
+    com.google.common*
+
+Import-Package: \
+    org.slf4j*,\
+    com.sun*,\
+    javax.net*
