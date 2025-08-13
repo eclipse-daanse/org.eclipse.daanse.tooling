@@ -26,7 +26,6 @@ import org.testcontainers.containers.GenericContainer;
 
 public class NginxRundAndConnectTest {
 
-    @Disabled
     @org.junit.jupiter.api.Test
     void startandConnectPortNginX() throws Exception {
 
