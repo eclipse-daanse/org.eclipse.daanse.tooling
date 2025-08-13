@@ -30,9 +30,11 @@
 
   <name>Eclipse Daanse Tooling Aggregator</name>
 
-  <description></description>
+  <description>Eclipse Daanse tooling modules including Docker Java connector
+    and Testcontainers integration</description>
 
   <modules>
+    <module>dockerjava</module>
     <module>testcontainers</module>
   </modules>
 </project>

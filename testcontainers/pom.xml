@@ -21,6 +21,10 @@
   </parent>
   <artifactId>org.eclipse.daanse.tooling.testcontainers</artifactId>
   <packaging>pom</packaging>
+
+  <name>Eclipse Daanse Testcontainers</name>
+  <description>Testcontainers integration modules for Eclipse Daanse</description>
+
   <modules>
     <module>core</module>
   </modules>
