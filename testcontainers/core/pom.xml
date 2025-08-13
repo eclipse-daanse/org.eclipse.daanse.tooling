@@ -27,6 +27,7 @@
 
   <dependencies>
 
+
     <dependency>
       <groupId>org.eclipse.daanse</groupId>
       <artifactId>org.eclipse.daanse.tooling.dockerjava</artifactId>

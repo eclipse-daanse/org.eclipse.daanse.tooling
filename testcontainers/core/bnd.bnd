@@ -14,23 +14,22 @@
 
 -metainf-services: auto
 
-Export-Package: \
+
+-exportcontents: \
     !org.testcontainers.shaded*,\
     org.testcontainers*
+
+-conditionalpackage: org.testcontainers*
 
 -includeresource: \
     @testcontainers-1.21.3.jar,\
     @duct-tape-1.0.8.jar
 
-DynamicImport-Package: *
-
 -privatepackage: \
     org.rnorth.ducttape*,\
-    com.fasterxml.jackson.annotation*,\
     org.junit.rules*,\
     org.junit.runners*,\
     org.hamcrest*,\
-    org.apache.commons.compress
 
 Import-Package: \
     !android.os.*,\
