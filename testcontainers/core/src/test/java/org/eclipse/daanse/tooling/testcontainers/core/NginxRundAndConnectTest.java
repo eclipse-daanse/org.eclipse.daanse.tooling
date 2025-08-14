@@ -20,6 +20,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.ServiceLoader;
 
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
@@ -27,22 +28,33 @@ import org.testcontainers.dockerclient.DockerClientProviderStrategy;
 
 public class NginxRundAndConnectTest {
 
-    @Test
+//    @Test
     void testName() throws Exception {
 
-        DockerClientProviderStrategy s1=    new    org.testcontainers.dockerclient.TestcontainersHostPropertyClientProviderStrategy();
-        DockerClientProviderStrategy s2=    new    org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy();
-        DockerClientProviderStrategy s3=    new    org.testcontainers.dockerclient.UnixSocketClientProviderStrategy();
-        DockerClientProviderStrategy s4=     new   org.testcontainers.dockerclient.DockerMachineClientProviderStrategy();
-        DockerClientProviderStrategy s5=    new   org.testcontainers.dockerclient.NpipeSocketClientProviderStrategy();
-        DockerClientProviderStrategy s6=    new   org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy();
-        DockerClientProviderStrategy s7=     new   org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy();
+        ClassLoader clOriginal = Thread.currentThread().getContextClassLoader();
+        ClassLoader testconCL = DockerClientProviderStrategy.class.getClassLoader();
+        Thread.currentThread().setContextClassLoader(testconCL);
 
-   List<DockerClientProviderStrategy> strategies=     List.of(s1, s2, s3, s4, s5, s6, s7);
-        DockerClientProviderStrategy.getFirstValidStrategy(strategies);
+        System.out.println("------------");
+        ServiceLoader.load(DockerClientProviderStrategy.class).forEach(s -> System.out.println(s));
+        Thread.currentThread().setContextClassLoader(clOriginal);
+
+        System.out.println("------------");
+
+        DockerClientProviderStrategy s1 = new org.testcontainers.dockerclient.TestcontainersHostPropertyClientProviderStrategy();
+        DockerClientProviderStrategy s2 = new org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy();
+        DockerClientProviderStrategy s3 = new org.testcontainers.dockerclient.UnixSocketClientProviderStrategy();
+        DockerClientProviderStrategy s4 = new org.testcontainers.dockerclient.DockerMachineClientProviderStrategy();
+        DockerClientProviderStrategy s5 = new org.testcontainers.dockerclient.NpipeSocketClientProviderStrategy();
+        DockerClientProviderStrategy s6 = new org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy();
+        DockerClientProviderStrategy s7 = new org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy();
+
+        List<DockerClientProviderStrategy> strategies = List.of(s1, s2, s3, s4, s5, s6, s7);
+        DockerClientProviderStrategy s = DockerClientProviderStrategy.getFirstValidStrategy(strategies);
+
     }
 
-//    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.Test
     void startandConnectPortNginX() throws Exception {
 
         try (GenericContainer<?> nginx = new GenericContainer("nginx:alpine-slim").withExposedPorts(80)
