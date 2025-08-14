@@ -35,5 +35,5 @@ Import-Package: \
     *
 
 Export-Package: \
-    org.testcontainers.containers,\
-    org.testcontainers.dockerclient
+    !org.testcontainers.shaded*,\
+    org.testcontainers*
