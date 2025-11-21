@@ -24,7 +24,6 @@ Export-Package: \
     @docker-java-transport-zerodep-3.5.3.jar, \
     @docker-java-transport-3.5.3.jar
 
-
 -privatepackage: \
     org.apache.commons.io*,\
     org.apache.commons.lang3*,\
