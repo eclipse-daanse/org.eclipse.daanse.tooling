@@ -43,7 +43,6 @@
 # -runbundles is calculated by the bnd-resolver-maven-plugin
 
 -runbundles: \
-	com.fasterxml.jackson.core.jackson-annotations;version='[2.20.0,2.20.1)',\
 	com.sun.jna;version='[5.18.1,5.18.2)',\
 	junit-jupiter-api;version='[5.10.2,5.10.3)',\
 	junit-jupiter-engine;version='[5.10.2,5.10.3)',\
