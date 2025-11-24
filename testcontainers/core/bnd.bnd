@@ -32,7 +32,6 @@ Import-Package: \
     !org.conscrypt, \
     !org.testcontainers.r2dbc.*, \
     !sun.nio.ch, \
-    !com.fasterxml.jackson.annotation, \
     org.brotli.dec;resolution:=optional, \
     *
 
