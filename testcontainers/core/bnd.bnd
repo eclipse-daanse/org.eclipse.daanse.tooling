@@ -15,10 +15,10 @@
 -metainf-services: auto
 
 -includeresource: \
-    @testcontainers-1.21.3.jar, \
-    @docker-java-api-3.4.2.jar, \
-    @docker-java-transport-zerodep-3.4.2.jar, \
-    @docker-java-transport-3.4.2.jar, \
+    @testcontainers-2.0.2.jar, \
+    @docker-java-api-3.7.0.jar, \
+    @docker-java-transport-zerodep-3.7.0.jar, \
+    @docker-java-transport-3.7.0.jar, \
     @duct-tape-1.0.8.jar
 
 Import-Package: \
@@ -32,6 +32,7 @@ Import-Package: \
     !org.conscrypt, \
     !org.testcontainers.r2dbc.*, \
     !sun.nio.ch, \
+    org.brotli.dec;resolution:=optional, \
     *
 
 Export-Package: \
