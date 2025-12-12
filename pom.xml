@@ -31,6 +31,10 @@
   <description>Eclipse Daanse tooling modules including Docker Java connector
     and Testcontainers integration</description>
 
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+  </properties>
+
   <repositories>
     <repository>
       <id>ossrh</id>
