@@ -18,40 +18,34 @@
 
   <parent>
     <groupId>org.eclipse.daanse</groupId>
-    <artifactId>org.eclipse.daanse.pom.parent</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <artifactId>org.eclipse.daanse.tooling</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
   </parent>
 
-  <artifactId>org.eclipse.daanse.tooling</artifactId>
+  <artifactId>org.eclipse.daanse.tooling.emf</artifactId>
   <packaging>pom</packaging>
-  <version>0.0.1-SNAPSHOT</version>
 
-  <name>Eclipse Daanse Tooling Aggregator</name>
-
-  <description>Eclipse Daanse tooling modules including Docker Java connector
-    and Testcontainers integration</description>
+  <name>Eclipse Daanse EMF Tooling</name>
+  <description>EMF code generation tooling for Eclipse Daanse</description>
 
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
+    <emf.ecore.version>2.41.0</emf.ecore.version>
+    <emf.common.version>2.44.0</emf.common.version>
+    <emf.xmi.version>2.39.0</emf.xmi.version>
+    <emf.codegen.version>2.27.0</emf.codegen.version>
+    <emf.codegen.ecore.version>2.44.0</emf.codegen.ecore.version>
   </properties>
+
+  <modules>
+    <module>codegen.maven</module>
+    <module>codegen.maven.example</module>
+  </modules>
 
   <repositories>
     <repository>
-      <id>ossrh</id>
-      <name>Sonatype Nexus Snapshots</name>
-      <url>https://central.sonatype.com/repository/maven-snapshots</url>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-        <enabled>true</enabled>
-      </snapshots>
+      <id>eclipse-releases</id>
+      <url>https://repo.eclipse.org/content/repositories/releases/</url>
     </repository>
   </repositories>
 
-  <modules>
-    <module>dockerjava</module>
-    <module>emf</module>
-    <module>testcontainers</module>
-  </modules>
 </project>
