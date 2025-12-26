@@ -15,11 +15,13 @@ package org.eclipse.daanse.tooling.emf.codegen;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -128,7 +130,8 @@ public class EmfGenerateMojo extends AbstractMojo {
     private MavenProject project;
 
     /**
-     * All projects in the reactor (for resolving reactor dependencies before they are packaged).
+     * All projects in the reactor (for resolving reactor dependencies before they
+     * are packaged).
      */
     @Parameter(defaultValue = "${reactorProjects}", readonly = true)
     private java.util.List<MavenProject> reactorProjects;
@@ -239,6 +242,14 @@ public class EmfGenerateMojo extends AbstractMojo {
      */
     @Parameter(property = "emf.copyrightText")
     private String copyrightText;
+
+    /**
+     * Whether to include the generated GenModel file in the JAR resources. This
+     * allows dependent modules to load the GenPackage from the JAR. Default is
+     * false.
+     */
+    @Parameter(property = "emf.includeGenModelInJar", defaultValue = "false")
+    private boolean includeGenModelInJar;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -372,9 +383,39 @@ public class EmfGenerateMojo extends AbstractMojo {
 
             logGenModelInfo(genModel);
 
+            // Optionally save the GenModel to resources for inclusion in JAR
+            if (includeGenModelInJar) {
+                saveGenModelToResources(genModel, ePackage);
+            }
+
+            // Collect referenced package names (to delete their generated files after
+            // generation)
+            List<String> referencedPackageNames = new ArrayList<>();
+            for (int i = 1; i < genModel.getGenPackages().size(); i++) {
+                GenPackage refPkg = genModel.getGenPackages().get(i);
+                String pkgPath = refPkg.getBasePackage().replace('.', '/') + "/" + refPkg.getPackageName();
+                referencedPackageNames.add(pkgPath);
+                getLog().info("Will delete generated files for referenced package: " + pkgPath);
+            }
+
             // Use OSGi templates if OSGi compatibility is enabled
             boolean useOsgiTemplates = genModel.isOSGiCompatible();
-            return runGenerator(genModel, ecoreFile.getAbsolutePath(), useOsgiTemplates);
+            Optional<String> result = runGenerator(genModel, ecoreFile.getAbsolutePath(), useOsgiTemplates);
+
+            // Delete generated files for referenced packages (they come from dependency
+            // JARs)
+            if (!result.isPresent()) {
+                File outputDir = new File(project.getBasedir(), outputDirectory);
+                for (String pkgPath : referencedPackageNames) {
+                    File pkgDir = new File(outputDir, pkgPath);
+                    if (pkgDir.exists()) {
+                        deleteDirectory(pkgDir);
+                        getLog().info("Deleted generated files for referenced package: " + pkgDir.getAbsolutePath());
+                    }
+                }
+            }
+
+            return result;
         } finally {
             resourceSet.getResources().forEach(Resource::unload);
             resourceSet.getResources().clear();
@@ -498,8 +539,9 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
-     * Adds usedGenPackages to the GenModel for external packages referenced by the model.
-     * This enables resolution of cross-package references during code generation.
+     * Adds usedGenPackages to the GenModel for external packages referenced by the
+     * model. This enables resolution of cross-package references during code
+     * generation.
      */
     private void addUsedGenPackagesFromDependencies(GenModel genModel) {
         // Collect all nsURIs of packages already in the GenModel
@@ -526,7 +568,8 @@ public class EmfGenerateMojo extends AbstractMojo {
             if (externalGenPackage != null) {
                 if (!genModel.getUsedGenPackages().contains(externalGenPackage)) {
                     genModel.getUsedGenPackages().add(externalGenPackage);
-                    getLog().info("Added usedGenPackage for external reference: " + externalGenPackage.getPackageName() + " (" + nsURI + ")");
+                    getLog().info("Added usedGenPackage for external reference: " + externalGenPackage.getPackageName()
+                            + " (" + nsURI + ")");
                 }
             } else {
                 getLog().warn("No GenPackage found for referenced external package: " + nsURI);
@@ -537,7 +580,8 @@ public class EmfGenerateMojo extends AbstractMojo {
     /**
      * Collects nsURIs of external packages referenced by the given EPackage.
      */
-    private void collectReferencedExternalNsURIs(EPackage ePackage, Set<String> ownPackageNsURIs, Set<String> referencedNsURIs) {
+    private void collectReferencedExternalNsURIs(EPackage ePackage, Set<String> ownPackageNsURIs,
+            Set<String> referencedNsURIs) {
         for (EClassifier classifier : ePackage.getEClassifiers()) {
             if (classifier instanceof EClass eClass) {
                 // Check super types
@@ -557,7 +601,8 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
-     * Adds the nsURI of the given package if it's an external (non-EMF core) package.
+     * Adds the nsURI of the given package if it's an external (non-EMF core)
+     * package.
      */
     private void addExternalNsURI(EPackage ePackage, Set<String> ownPackageNsURIs, Set<String> referencedNsURIs) {
         if (ePackage != null) {
@@ -610,33 +655,38 @@ public class EmfGenerateMojo extends AbstractMojo {
                 genModel::setRootExtendsInterface);
         applyStringOption(genModel, ePackage, "copyrightText", copyrightText, genModel::setCopyrightText);
 
-        // Handle referenced packages
+        // Resolve all proxies in the EPackage to ensure we get the correct EPackage
+        // instances
+        // from the registry (for referenced packages like bi and cg)
+        EcoreUtil.resolveAll(ePackage);
+
+        // Find referenced external packages
         Set<EPackage> referencedPackages = findReferencedExternalPackages(ePackage);
-        genModel.initialize(Collections.singletonList(ePackage));
 
-        for (EPackage refPackage : referencedPackages) {
-            GenModel refGenModel = GenModelFactory.eINSTANCE.createGenModel();
-            refGenModel.initialize(Collections.singletonList(refPackage));
-            refGenModel.setModelName(capitalize(refPackage.getName()));
+        // Initialize GenModel with ALL packages (main + referenced) in the same
+        // GenModel
+        // This is required because findGenClassifier needs all packages in the same
+        // GenModel
+        // to correctly resolve type references for code generation
+        List<EPackage> allPackages = new ArrayList<>();
+        allPackages.add(ePackage);
+        allPackages.addAll(referencedPackages);
+        genModel.initialize(allPackages);
 
-            URI refGenModelUri = URI.createURI("synthetic:/" + refPackage.getName() + ".genmodel");
-            Resource refGenModelResource = resourceSet.createResource(refGenModelUri);
-            refGenModelResource.getContents().add(refGenModel);
-
-            if (!refGenModel.getGenPackages().isEmpty()) {
-                GenPackage refGenPackage = refGenModel.getGenPackages().get(0);
-                String derivedRefBasePackage = deriveBasePackage(refPackage.getNsURI());
-                if (derivedRefBasePackage != null && !derivedRefBasePackage.isEmpty()) {
-                    refGenPackage.setBasePackage(derivedRefBasePackage);
-                }
-                refGenPackage.setPrefix(capitalize(refPackage.getName()));
-                genModel.getUsedGenPackages().add(refGenPackage);
-                getLog().info(
-                        "Added usedGenPackage: " + refGenPackage.getPackageName() + " (" + refPackage.getNsURI() + ")");
-            }
+        // Configure referenced GenPackages (indices 1+) so they don't generate code
+        // but are still available for findGenClassifier
+        for (int i = 1; i < genModel.getGenPackages().size(); i++) {
+            GenPackage refGenPackage = genModel.getGenPackages().get(i);
+            EPackage refEPackage = refGenPackage.getEcorePackage();
+            configureGenPackageFromAnnotations(refGenPackage, refEPackage);
+            getLog().info("Configured referenced GenPackage (no code gen): " + refGenPackage.getPackageName() + " ("
+                    + refEPackage.getNsURI() + ")");
         }
 
-        // Create resource for main GenModel
+        // Resolve all references in the GenModel
+        EcoreUtil.resolveAll(genModel);
+
+        // Create resource for GenModel
         URI genModelUri = URI
                 .createURI("platform:/resource/" + projectName + "/model/" + ePackage.getName() + ".genmodel");
         Resource genModelResource = resourceSet.createResource(genModelUri);
@@ -822,6 +872,62 @@ public class EmfGenerateMojo extends AbstractMojo {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
+    /**
+     * Configures a GenPackage from EPackage GenModel annotations. Sets basePackage,
+     * prefix, and fileExtensions based on annotations or derived values.
+     */
+    private void configureGenPackageFromAnnotations(GenPackage genPackage, EPackage ePackage) {
+        // basePackage
+        String basePackage = getGenModelAnnotation(ePackage, "basePackage");
+        if (basePackage == null || basePackage.isEmpty()) {
+            basePackage = deriveBasePackage(ePackage.getNsURI());
+        }
+        if (basePackage != null && !basePackage.isEmpty()) {
+            genPackage.setBasePackage(basePackage);
+        }
+
+        // prefix
+        String prefix = getGenModelAnnotation(ePackage, "prefix");
+        if (prefix == null || prefix.isEmpty()) {
+            prefix = capitalize(ePackage.getName());
+        }
+        genPackage.setPrefix(prefix);
+
+        // fileExtensions
+        String fileExt = getGenModelAnnotation(ePackage, "fileExtensions");
+        if (fileExt != null && !fileExt.isEmpty()) {
+            genPackage.setFileExtensions(fileExt);
+        }
+    }
+
+    /**
+     * Registers an EPackage in the registries and creates a corresponding
+     * GenPackage.
+     *
+     * @param resourceSet the resource set
+     * @param ePackage    the EPackage to register
+     * @param source      description of where the package came from (for logging)
+     */
+    private void registerEPackage(ResourceSet resourceSet, EPackage ePackage, String source) {
+        String nsURI = ePackage.getNsURI();
+        if (nsURI == null || EPackage.Registry.INSTANCE.containsKey(nsURI)) {
+            return;
+        }
+
+        EPackage.Registry.INSTANCE.put(nsURI, ePackage);
+        resourceSet.getPackageRegistry().put(nsURI, ePackage);
+        getLog().info("Registered EPackage" + source + ": " + ePackage.getName() + " (" + nsURI + ")");
+
+        // Also create and register a GenPackage if GenModel annotations are present
+        if (!genPackageRegistry.containsKey(nsURI)) {
+            GenPackage genPackage = createGenPackageFromEcore(resourceSet, ePackage);
+            if (genPackage != null) {
+                genPackageRegistry.put(nsURI, genPackage);
+                getLog().info("Created GenPackage" + source + ": " + genPackage.getPackageName() + " (" + nsURI + ")");
+            }
+        }
+    }
+
     private void loadModelsFromDependencies(ResourceSet resourceSet) {
         // Build a map of reactor projects by groupId:artifactId for quick lookup
         Map<String, MavenProject> reactorProjectMap = new HashMap<>();
@@ -833,8 +939,8 @@ public class EmfGenerateMojo extends AbstractMojo {
         }
 
         // Collect model files from all dependencies
-        java.util.List<File> ecoreFiles = new java.util.ArrayList<>();
-        java.util.List<File> genmodelFiles = new java.util.ArrayList<>();
+        List<File> ecoreFiles = new ArrayList<>();
+        List<File> genmodelFiles = new ArrayList<>();
 
         for (Artifact artifact : project.getArtifacts()) {
             String key = artifact.getGroupId() + ":" + artifact.getArtifactId();
@@ -866,8 +972,8 @@ public class EmfGenerateMojo extends AbstractMojo {
     /**
      * Collect model files from a reactor project's resource directories.
      */
-    private void collectModelFilesFromReactorProject(MavenProject reactorProject,
-            java.util.List<File> ecoreFiles, java.util.List<File> genmodelFiles) {
+    private void collectModelFilesFromReactorProject(MavenProject reactorProject, List<File> ecoreFiles,
+            List<File> genmodelFiles) {
         for (org.apache.maven.model.Resource resource : reactorProject.getResources()) {
             File resourceDir = new File(resource.getDirectory());
             if (resourceDir.exists() && resourceDir.isDirectory()) {
@@ -879,8 +985,8 @@ public class EmfGenerateMojo extends AbstractMojo {
     /**
      * Collect model files from a JAR dependency.
      */
-    private void collectModelFilesFromJar(File jarFile, ResourceSet resourceSet,
-            java.util.List<File> ecoreFiles, java.util.List<File> genmodelFiles) {
+    private void collectModelFilesFromJar(File jarFile, ResourceSet resourceSet, List<File> ecoreFiles,
+            List<File> genmodelFiles) {
         try (JarFile jar = new JarFile(jarFile)) {
             Enumeration<JarEntry> entries = jar.entries();
             while (entries.hasMoreElements()) {
@@ -902,8 +1008,7 @@ public class EmfGenerateMojo extends AbstractMojo {
     /**
      * Recursively collect model files from a directory.
      */
-    private void collectModelFilesFromDirectory(File dir,
-            java.util.List<File> ecoreFiles, java.util.List<File> genmodelFiles) {
+    private void collectModelFilesFromDirectory(File dir, List<File> ecoreFiles, List<File> genmodelFiles) {
         File[] files = dir.listFiles();
         if (files == null) {
             return;
@@ -925,9 +1030,8 @@ public class EmfGenerateMojo extends AbstractMojo {
      * Check if a path should be processed (excludes EMF internal paths).
      */
     private boolean isModelPath(String path) {
-        return !path.contains("org/eclipse/emf/ecore/")
-            && !path.contains("org/eclipse/emf/codegen/")
-            && !path.contains("META-INF/");
+        return !path.contains("org/eclipse/emf/ecore/") && !path.contains("org/eclipse/emf/codegen/")
+                && !path.contains("META-INF/");
     }
 
     private void loadEcoreFromFile(ResourceSet resourceSet, File ecoreFile) {
@@ -937,18 +1041,74 @@ public class EmfGenerateMojo extends AbstractMojo {
             if (ecoreResource != null && !ecoreResource.getContents().isEmpty()) {
                 for (org.eclipse.emf.ecore.EObject obj : ecoreResource.getContents()) {
                     if (obj instanceof EPackage ePackage) {
-                        String nsURI = ePackage.getNsURI();
-                        if (nsURI != null && !EPackage.Registry.INSTANCE.containsKey(nsURI)) {
-                            EPackage.Registry.INSTANCE.put(nsURI, ePackage);
-                            resourceSet.getPackageRegistry().put(nsURI, ePackage);
-                            getLog().info("Registered EPackage: " + ePackage.getName() + " (" + nsURI + ")");
-                        }
+                        registerEPackage(resourceSet, ePackage, "");
                     }
                 }
             }
         } catch (Exception e) {
             getLog().debug("Could not load Ecore: " + ecoreFile.getAbsolutePath() + " - " + e.getMessage());
         }
+    }
+
+    /**
+     * Saves the GenModel to the resources directory for inclusion in the JAR. The
+     * genmodel will be saved alongside the ecore file in the model directory.
+     */
+    private void saveGenModelToResources(GenModel genModel, EPackage ePackage) {
+        try {
+            // Determine the target path - alongside the ecore file
+            File ecoreParentDir = ecoreFile.getParentFile();
+            String genModelFileName = ePackage.getName() + ".genmodel";
+            File genModelFile = new File(ecoreParentDir, genModelFileName);
+
+            // Create the resource and save
+            URI genModelUri = URI.createFileURI(genModelFile.getAbsolutePath());
+            Resource genModelResource = genModel.eResource();
+
+            // If the genmodel is in a synthetic resource, we need to move it to the file
+            // resource
+            if (genModelResource.getURI().toString().startsWith("synthetic:")
+                    || genModelResource.getURI().toString().startsWith("platform:")) {
+                ResourceSet resourceSet = genModelResource.getResourceSet();
+                Resource fileResource = resourceSet.createResource(genModelUri);
+                fileResource.getContents().add(genModel);
+                genModelResource = fileResource;
+            } else {
+                genModelResource.setURI(genModelUri);
+            }
+
+            genModelResource.save(Collections.emptyMap());
+            getLog().info("Saved GenModel for JAR inclusion: " + genModelFile.getAbsolutePath());
+        } catch (IOException e) {
+            getLog().warn("Could not save GenModel to resources: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Creates a GenPackage from an EPackage using GenModel annotations.
+     */
+    private GenPackage createGenPackageFromEcore(ResourceSet resourceSet, EPackage ePackage) {
+        try {
+            GenModel genModel = GenModelFactory.eINSTANCE.createGenModel();
+            genModel.initialize(Collections.singletonList(ePackage));
+            genModel.setModelName(capitalize(ePackage.getName()));
+
+            // Create a synthetic resource for the GenModel
+            URI genModelUri = URI.createURI("synthetic:/" + ePackage.getName() + ".genmodel");
+            Resource genModelResource = resourceSet.createResource(genModelUri);
+            genModelResource.getContents().add(genModel);
+
+            if (!genModel.getGenPackages().isEmpty()) {
+                GenPackage genPackage = genModel.getGenPackages().get(0);
+                configureGenPackageFromAnnotations(genPackage, ePackage);
+                genPackage.setEcorePackage(ePackage);
+                EcoreUtil.resolveAll(genModel);
+                return genPackage;
+            }
+        } catch (Exception e) {
+            getLog().debug("Could not create GenPackage from Ecore: " + ePackage.getName() + " - " + e.getMessage());
+        }
+        return null;
     }
 
     private void loadGenModelFromFile(ResourceSet resourceSet, File genmodelFile) {
@@ -963,7 +1123,8 @@ public class EmfGenerateMojo extends AbstractMojo {
                             EPackage ePackage = genPackage.getEcorePackage();
                             if (ePackage != null && ePackage.getNsURI() != null) {
                                 genPackageRegistry.put(ePackage.getNsURI(), genPackage);
-                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " (" + ePackage.getNsURI() + ")");
+                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " ("
+                                        + ePackage.getNsURI() + ")");
                             }
                         }
                     }
@@ -981,12 +1142,7 @@ public class EmfGenerateMojo extends AbstractMojo {
             if (ecoreResource != null && !ecoreResource.getContents().isEmpty()) {
                 for (org.eclipse.emf.ecore.EObject obj : ecoreResource.getContents()) {
                     if (obj instanceof EPackage ePackage) {
-                        String nsURI = ePackage.getNsURI();
-                        if (nsURI != null && !EPackage.Registry.INSTANCE.containsKey(nsURI)) {
-                            EPackage.Registry.INSTANCE.put(nsURI, ePackage);
-                            resourceSet.getPackageRegistry().put(nsURI, ePackage);
-                            getLog().info("Registered EPackage: " + ePackage.getName() + " (" + nsURI + ")");
-                        }
+                        registerEPackage(resourceSet, ePackage, " from JAR");
                     }
                 }
             }
@@ -1007,7 +1163,8 @@ public class EmfGenerateMojo extends AbstractMojo {
                             EPackage ePackage = genPackage.getEcorePackage();
                             if (ePackage != null && ePackage.getNsURI() != null) {
                                 genPackageRegistry.put(ePackage.getNsURI(), genPackage);
-                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " (" + ePackage.getNsURI() + ")");
+                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " ("
+                                        + ePackage.getNsURI() + ")");
                             }
                         }
                     }
@@ -1032,5 +1189,20 @@ public class EmfGenerateMojo extends AbstractMojo {
         for (Diagnostic child : diagnostic.getChildren()) {
             printDiagnostic(child, prefix + "  ");
         }
+    }
+
+    /**
+     * Recursively deletes a directory and all its contents.
+     */
+    private void deleteDirectory(File dir) {
+        if (dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    deleteDirectory(file);
+                }
+            }
+        }
+        dir.delete();
     }
 }
