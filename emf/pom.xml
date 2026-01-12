@@ -28,13 +28,6 @@
   <name>Eclipse Daanse EMF Tooling</name>
   <description>EMF code generation tooling for Eclipse Daanse</description>
 
-  <properties>
-    <emf.ecore.version>2.41.0</emf.ecore.version>
-    <emf.common.version>2.44.0</emf.common.version>
-    <emf.xmi.version>2.39.0</emf.xmi.version>
-    <emf.codegen.version>2.27.0</emf.codegen.version>
-    <emf.codegen.ecore.version>2.44.0</emf.codegen.ecore.version>
-  </properties>
 
   <modules>
     <module>codegen.maven</module>
