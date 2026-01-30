@@ -30,13 +30,27 @@
     files</description>
 
   <modules>
+    <!-- Base modules without dependencies -->
     <module>ecore.simple</module>
-    <module>ecore.dependencies</module>
     <module>ecore.annotated</module>
     <module>ecore.noosgi</module>
     <module>genmodel.simple</module>
+    <!-- Modules with dependencies (must be built after their dependencies) -->
+    <module>ecore.dependencies</module>
     <module>genmodel.dependencies</module>
   </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Fennec EMF OSGi implementation (for OSGi runtime) -->
+      <dependency>
+        <groupId>org.eclipse.fennec.emf</groupId>
+        <artifactId>org.eclipse.fennec.emf.osgi.component</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <scope>runtime</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
 

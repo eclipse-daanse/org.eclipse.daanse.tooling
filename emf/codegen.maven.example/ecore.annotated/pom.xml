@@ -34,18 +34,23 @@
     <dependency>
       <groupId>org.eclipse.emf</groupId>
       <artifactId>org.eclipse.emf.common</artifactId>
-      <version>${emf.common.version}</version>
     </dependency>
     <dependency>
       <groupId>org.eclipse.emf</groupId>
       <artifactId>org.eclipse.emf.ecore</artifactId>
-      <version>${emf.ecore.version}</version>
     </dependency>
     <!-- Fennec EMF OSGi API (for generated OSGi service code) -->
     <dependency>
       <groupId>org.eclipse.fennec.emf</groupId>
       <artifactId>org.eclipse.fennec.emf.osgi.api</artifactId>
       <version>1.0.0-SNAPSHOT</version>
+    </dependency>
+    <!-- Fennec EMF OSGi implementation (for OSGi runtime tests) -->
+    <dependency>
+      <groupId>org.eclipse.fennec.emf</groupId>
+      <artifactId>org.eclipse.fennec.emf.osgi.component</artifactId>
+      <version>1.0.0-SNAPSHOT</version>
+      <scope>runtime</scope>
     </dependency>
 
   </dependencies>
@@ -63,18 +68,26 @@
             </goals>
             <configuration>
               <!--
-                This example demonstrates reading GenModel settings from ecore annotations.
-                The ecore file contains GenModel annotations that specify:
-                - basePackage
-                - prefix
-                - fileExtensions
-                - copyrightText
-                - documentation
+                This example demonstrates:
+                1. Reading GenModel settings from ecore annotations
+                2. Model files in a model/ folder at project root (not in src/main/resources)
+                3. Automatic model file copying to JAR (ecore + genmodel)
 
-                No Maven configuration needed - all settings come from the ecore file!
+                Default behavior:
+                - includeGenModelInJar=true (saves generated genmodel)
+                - copyModelFiles=true (copies ecore + genmodel to JAR)
+                - modelDirectory auto-detected from ecoreFile parent
               -->
               <ecoreFile>model/catalog.ecore</ecoreFile>
               <outputDirectory>target/generated-sources/emf</outputDirectory>
+              <ecoreBundleLocation>model/catalog.ecore</ecoreBundleLocation>
+
+              <!-- @EPackage annotation configuration - only include uri and
+              ecore -->
+              <includeGenModelAttr>false</includeGenModelAttr>
+              <includeGenModelSourceLocationsAttr>false</includeGenModelSourceLocationsAttr>
+              <includeEcoreAttr>true</includeEcoreAttr>
+              <includeEcoreSourceLocationsAttr>false</includeEcoreSourceLocationsAttr>
             </configuration>
           </execution>
         </executions>

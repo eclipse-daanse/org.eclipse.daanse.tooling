@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="ASCII"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+  xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel"
+  modelDirectory="/org.eclipse.daanse.tooling.emf.codegen.maven.example.ecore.noosgi/target/generated-sources/emf"
+  modelName="Simple" complianceLevel="17.0" suppressGenModelAnnotations="false"
+  copyrightFields="false">
+  <genPackages prefix="Simple" basePackage="org.eclipse.daanse.example"
+    disposableProviderFactory="true">
+    <ecorePackage href="simple.ecore#/" />
+    <genClasses>
+      <ecoreClass href="simple.ecore#//Item" />
+      <genFeatures createChild="false">
+        <ecoreFeature xsi:type="ecore:EAttribute"
+          href="simple.ecore#//Item/name" />
+      </genFeatures>
+      <genFeatures createChild="false">
+        <ecoreFeature xsi:type="ecore:EAttribute"
+          href="simple.ecore#//Item/value" />
+      </genFeatures>
+    </genClasses>
+    <genClasses>
+      <ecoreClass href="simple.ecore#//Container" />
+      <genFeatures createChild="false">
+        <ecoreFeature xsi:type="ecore:EAttribute"
+          href="simple.ecore#//Container/label" />
+      </genFeatures>
+      <genFeatures property="None" children="true" createChild="true">
+        <ecoreFeature xsi:type="ecore:EReference"
+          href="simple.ecore#//Container/items" />
+      </genFeatures>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/*********************************************************************
+* Copyright (c) 2025 Contributors to the Eclipse Foundation.
+*
+* This program and the accompanying materials are made
+* available under the terms of the Eclipse Public License 2.0
+* which is available at https://www.eclipse.org/legal/epl-2.0/
+*
+* SPDX-License-Identifier: EPL-2.0
+**********************************************************************/
+-->
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="borrowing"
+  nsURI="http://daanse.eclipse.org/example/borrowing"
+  nsPrefix="borrowing">
+  <eClassifiers xsi:type="ecore:EClass" name="Borrower">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString" />
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="memberId"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="loans"
+      upperBound="-1"
+      eType="#//Loan" containment="true" eOpposite="#//Loan/borrower" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Loan">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="loanDate"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDate" />
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="dueDate"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDate" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="book"
+      eType="ecore:EClass http://daanse.eclipse.org/example/library#//Book" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="borrower"
+      eType="#//Borrower"
+      eOpposite="#//Borrower/loans" />
+  </eClassifiers>
+</ecore:EPackage>

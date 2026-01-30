@@ -10,34 +10,41 @@
 * SPDX-License-Identifier: EPL-2.0
 **********************************************************************/
 -->
-<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="simple" nsURI="http://daanse.eclipse.org/example/simple" nsPrefix="simple">
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="simple"
+  nsURI="http://daanse.eclipse.org/example/simple" nsPrefix="simple">
   <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-    <details key="basePackage" value="org.eclipse.daanse.example"/>
-    <details key="prefix" value="Simple"/>
-    <details key="documentation" value="Simple model demonstrating non-OSGi code generation."/>
+    <details key="basePackage" value="org.eclipse.daanse.example" />
+    <details key="prefix" value="Simple" />
+    <details key="documentation"
+      value="Simple model demonstrating non-OSGi code generation." />
   </eAnnotations>
   <eClassifiers xsi:type="ecore:EClass" name="Item">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A simple item with name and value."/>
+      <details key="documentation" value="A simple item with name and value." />
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The item name."/>
+        <details key="documentation" value="The item name." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="value" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="value"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The item value."/>
+        <details key="documentation" value="The item value." />
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Container">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A container holding multiple items."/>
+      <details key="documentation" value="A container holding multiple items." />
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="label" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="items" upperBound="-1"
-        eType="#//Item" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="label"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="items"
+      upperBound="-1"
+      eType="#//Item" containment="true" />
   </eClassifiers>
 </ecore:EPackage>

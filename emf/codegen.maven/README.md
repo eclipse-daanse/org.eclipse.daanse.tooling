@@ -77,7 +77,11 @@ Use an existing GenModel file:
 | Parameter | Property | Default | Description |
 |-----------|----------|---------|-------------|
 | `outputDirectory` | `emf.outputDirectory` | `target/generated-sources/emf` | Output directory for generated code |
-| `includeGenModelInJar` | `emf.includeGenModelInJar` | `false` | Include generated GenModel in JAR resources |
+| `ecoreBundleLocation` | `emf.ecoreBundleLocation` | - | Bundle-relative path to ecore file for @EPackage annotation (e.g., "model/catalog.ecore") |
+| `ecoreTargetFile` | `emf.ecoreTargetFile` | `model/{filename}.ecore` | Target file path in JAR for the ecore file |
+| `genmodelTargetFile` | `emf.genmodelTargetFile` | `model/{filename}.genmodel` | Target file path in JAR for the genmodel file |
+
+**Note:** The plugin always includes both ecore and genmodel files in the JAR under `model/`. In Ecore mode, the genmodel is generated on-the-fly directly to `target/classes/model/` (not stored in source). In GenModel mode, both files are copied from the source model directory.
 
 ### GenModel Settings (Ecore Mode)
 
@@ -86,6 +90,7 @@ Use an existing GenModel file:
 | `basePackage` | `emf.basePackage` | (derived) | Base package for generated code |
 | `prefix` | `emf.prefix` | (derived) | Prefix for generated class names |
 | `fileExtension` | `emf.fileExtension` | - | File extension for model resources |
+| `resource` | `emf.resource` | - | Resource type (XMI, XML, BASIC, NONE) - determines ResourceFactory generation |
 | `osgiCompatible` | `emf.osgiCompatible` | `true` | Generate OSGi-compatible code |
 | `suppressInterfaces` | `emf.suppressInterfaces` | `false` | Suppress interface generation |
 | `suppressEMFTypes` | `emf.suppressEMFTypes` | `false` | Use Java native types instead of EMF types |
