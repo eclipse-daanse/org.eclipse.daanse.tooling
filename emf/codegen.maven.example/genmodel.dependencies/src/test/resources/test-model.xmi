@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<borrowing:Borrower
+  xmlns:borrowing="http://daanse.eclipse.org/example/borrowing"
+  name="Test Borrower" />

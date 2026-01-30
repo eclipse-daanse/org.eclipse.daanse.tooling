@@ -10,75 +10,94 @@
 * SPDX-License-Identifier: EPL-2.0
 **********************************************************************/
 -->
-<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="catalog" nsURI="http://daanse.eclipse.org/example/catalog" nsPrefix="catalog">
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="catalog"
+  nsURI="http://daanse.eclipse.org/example/catalog" nsPrefix="catalog">
   <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-    <details key="basePackage" value="org.eclipse.daanse.example"/>
-    <details key="prefix" value="Catalog"/>
-    <details key="fileExtensions" value="catalog"/>
-    <details key="copyrightText" value="Copyright (c) 2025 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0"/>
-    <details key="documentation" value="Product catalog model demonstrating annotation-based GenModel configuration."/>
+    <details key="basePackage" value="org.eclipse.daanse.example" />
+    <details key="prefix" value="Catalog" />
+    <details key="fileExtensions" value="catalog" />
+    <details key="resource" value="XMI" />
+    <details key="copyrightText"
+      value="Copyright (c) 2025 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0" />
+    <details key="documentation"
+      value="Product catalog model demonstrating annotation-based GenModel configuration." />
   </eAnnotations>
   <eClassifiers xsi:type="ecore:EClass" name="Catalog">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A catalog containing products organized in categories."/>
+      <details key="documentation"
+        value="A catalog containing products organized in categories." />
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The catalog name."/>
+        <details key="documentation" value="The catalog name." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="categories" upperBound="-1"
-        eType="#//Category" containment="true">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="categories"
+      upperBound="-1"
+      eType="#//Category" containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Categories in this catalog."/>
+        <details key="documentation" value="Categories in this catalog." />
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Category">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A category grouping related products."/>
+      <details key="documentation" value="A category grouping related products." />
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The category name."/>
+        <details key="documentation" value="The category name." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="description" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="description"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Optional description of the category."/>
+        <details key="documentation"
+          value="Optional description of the category." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="products" upperBound="-1"
-        eType="#//Product" containment="true">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="products"
+      upperBound="-1"
+      eType="#//Product" containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Products in this category."/>
+        <details key="documentation" value="Products in this category." />
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Product">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A product with name, price and availability."/>
+      <details key="documentation"
+        value="A product with name, price and availability." />
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="sku" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="sku"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Stock Keeping Unit - unique product identifier."/>
+        <details key="documentation"
+          value="Stock Keeping Unit - unique product identifier." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The product name."/>
+        <details key="documentation" value="The product name." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="price" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBigDecimal">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="price"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBigDecimal">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The product price."/>
+        <details key="documentation" value="The product price." />
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="inStock" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
-        defaultValueLiteral="true">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="inStock"
+      eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+      defaultValueLiteral="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Whether the product is currently in stock."/>
+        <details key="documentation"
+          value="Whether the product is currently in stock." />
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
