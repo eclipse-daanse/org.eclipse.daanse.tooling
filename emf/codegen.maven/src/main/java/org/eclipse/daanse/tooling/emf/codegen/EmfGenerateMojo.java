@@ -61,6 +61,7 @@ import org.eclipse.emf.ecore.xmi.impl.EcoreResourceFactoryImpl;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.fennec.emf.osgi.codegen.adapter.BNDGeneratorAdapterFactory;
 
+
 /**
  * Unified Maven Mojo for generating EMF model code from either a GenModel or
  * Ecore file.
