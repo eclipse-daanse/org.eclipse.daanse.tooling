@@ -31,7 +31,6 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
 import org.eclipse.fennec.emf.osgi.annotation.require.RequireEMF;
 import org.eclipse.fennec.emf.osgi.constants.EMFNamespaces;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -111,8 +110,6 @@ public class ResourceSetTest {
     }
 
     @Test
-
-    @Disabled
     public void epackageExistsTest(
             @InjectBundleContext BundleContext bc, @InjectService(cardinality = 1, filter = "(" + EMFNamespaces.EMF_NAME
                     + "=" + BasePackage.eNAME + ")", timeout = 1000) ServiceAware<EPackage> saEPackage)
@@ -126,8 +123,6 @@ public class ResourceSetTest {
     }
 
     @Test
-
-    @Disabled
     public void resourceSetReadTest(@InjectBundleContext BundleContext bc,
             @InjectService(cardinality = 1, filter = "(" + EMFNamespaces.EMF_MODEL_NSURI + "=" + BasePackage.eNS_URI
                     + ")", timeout = 1000) ServiceAware<ResourceSet> saResourceSet)
@@ -148,7 +143,6 @@ public class ResourceSetTest {
     Path tempDir;
 
     @Test
-    @Disabled
     public void writeTest(@InjectBundleContext BundleContext bc,
             @InjectService(cardinality = 1, filter = "(" + EMFNamespaces.EMF_MODEL_NSURI + "=" + BasePackage.eNS_URI
                     + ")", timeout = 1000) ServiceAware<ResourceSet> saResourceSet)
