@@ -33,6 +33,7 @@
     <!-- Base modules without dependencies -->
     <module>ecore.simple</module>
     <module>ecore.annotated</module>
+    <module>ecore.loadpackage</module>
     <module>ecore.noosgi</module>
     <module>genmodel.simple</module>
     <!-- Modules with dependencies (must be built after their dependencies) -->
