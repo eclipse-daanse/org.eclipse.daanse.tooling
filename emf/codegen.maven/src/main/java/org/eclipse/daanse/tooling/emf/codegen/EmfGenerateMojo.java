@@ -61,7 +61,6 @@ import org.eclipse.emf.ecore.xmi.impl.EcoreResourceFactoryImpl;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.fennec.emf.osgi.codegen.adapter.BNDGeneratorAdapterFactory;
 
-
 /**
  * Unified Maven Mojo for generating EMF model code from either a GenModel or
  * Ecore file.
@@ -118,13 +117,28 @@ public class EmfGenerateMojo extends AbstractMojo {
 
     public static final String INCLUDE_GEN_MODEL_FOLDER = "includeGenModelFolder";
     public static final String INCLUDE_ECORE_FOLDER = "includeEcoreFolder";
-    public static final String ECORE_BUNDLE_LOCATION = "ecoreBundleLocation";
+    public static final String ECORE_PATH = "ecorePath";
     public static final String GENMODEL_ANNOTATION_SOURCE = "http://www.eclipse.org/emf/2002/GenModel";
+
+    /**
+     * Fixed directory path where model files (ecore, genmodel) are placed in the JAR.
+     */
+    private static final String MODEL_FOLDER = "model";
 
     /**
      * Registry mapping EPackage nsURI to GenPackage for dependency resolution.
      */
     private final Map<String, GenPackage> genPackageRegistry = new HashMap<>();
+
+    /**
+     * Effective ecore path for @EPackage annotation (computed in runGenerator).
+     */
+    private String effectiveEcorePath;
+
+    /**
+     * Effective genmodel path for @EPackage annotation (computed in runGenerator).
+     */
+    private String effectiveGenmodelPath;
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -134,7 +148,7 @@ public class EmfGenerateMojo extends AbstractMojo {
      * are packaged).
      */
     @Parameter(defaultValue = "${reactorProjects}", readonly = true)
-    private java.util.List<MavenProject> reactorProjects;
+    private List<MavenProject> reactorProjects;
 
     // ========== Input File Parameters ==========
 
@@ -159,20 +173,6 @@ public class EmfGenerateMojo extends AbstractMojo {
      */
     @Parameter(property = "emf.outputDirectory", defaultValue = "target/generated-sources/emf")
     private String outputDirectory;
-
-    /**
-     * Optional location where the genmodel will be included in the built artifact.
-     * Used for OSGi capability generation.
-     */
-    @Parameter(property = "emf.genmodelIncludeLocation")
-    private String genmodelIncludeLocation;
-
-    /**
-     * The bundle-relative path to the ecore file for the @EPackage annotation.
-     * Example: "model/catalog.ecore"
-     */
-    @Parameter(property = "emf.ecoreBundleLocation")
-    private String ecoreBundleLocation;
 
     // ========== GenModel Configuration (for Ecore mode) ==========
 
@@ -257,21 +257,6 @@ public class EmfGenerateMojo extends AbstractMojo {
     @Parameter(property = "emf.copyrightText")
     private String copyrightText;
 
-    /**
-     * Target file path in JAR for the ecore file (e.g., "model/catalog.ecore"). If
-     * not set (null or empty), defaults to "model/{epackage-name}.ecore".
-     */
-    @Parameter(property = "emf.ecoreTargetFile")
-    private String ecoreTargetFile;
-
-    /**
-     * Target file path in JAR for the genmodel file (e.g.,
-     * "model/catalog.genmodel"). If not set (null or empty), defaults to
-     * "model/{epackage-name}.genmodel".
-     */
-    @Parameter(property = "emf.genmodelTargetFile")
-    private String genmodelTargetFile;
-
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         // Determine which mode to use
@@ -309,9 +294,8 @@ public class EmfGenerateMojo extends AbstractMojo {
             throw new MojoFailureException(error.get());
         }
 
-        // Post-process generated sources to remove source location attributes from
-        // @EPackage annotations
-        postProcessEPackageAnnotations(outputDir);
+        // Post-process generated sources (fix annotations and paths)
+        postProcessGeneratedSources(outputDir);
 
         project.addCompileSourceRoot(outputDir.getAbsolutePath());
         getLog().info("Added " + outputDir.getAbsolutePath() + " to compile source roots");
@@ -359,9 +343,7 @@ public class EmfGenerateMojo extends AbstractMojo {
             getLog().info("Setting modelDirectory: " + modelDirectory);
             genModel.setModelDirectory(modelDirectory);
 
-            // Use OSGi templates if the genmodel has OSGi compatibility enabled
-            boolean useOsgiTemplates = genModel.isOSGiCompatible();
-            return runGenerator(genModel, genmodelFile.getAbsolutePath(), useOsgiTemplates);
+            return runGenerator(genModel);
         } finally {
             resourceSet.getResources().forEach(Resource::unload);
             resourceSet.getResources().clear();
@@ -411,6 +393,21 @@ public class EmfGenerateMojo extends AbstractMojo {
 
             logGenModelInfo(genModel);
 
+            // Set loadInitialization RIGHT BEFORE saving to prevent EMF from overriding it
+            // during EcoreUtil.resolveAll() calls. EMF's GenModel.initialize() automatically
+            // sets loadInitialization=true for models with >500 classifiers, but we want to
+            // respect the explicit annotation value from the ecore file.
+            if (!genModel.getGenPackages().isEmpty()) {
+                GenPackage mainGenPackage = genModel.getGenPackages().get(0);
+                boolean loadInit = getGenModelAnnotationBoolean(ePackage, "loadInitialization", false);
+                mainGenPackage.setLoadInitialization(loadInit);
+                if (loadInit) {
+                    getLog().info("Setting loadInitialization: true (from annotation)");
+                } else {
+                    getLog().info("Setting loadInitialization: false (default - static initialization)");
+                }
+            }
+
             // Save the GenModel to resources for inclusion in JAR
             saveGenModelToResources(genModel, ePackage);
 
@@ -424,9 +421,7 @@ public class EmfGenerateMojo extends AbstractMojo {
                 getLog().info("Will delete generated files for referenced package: " + pkgPath);
             }
 
-            // Use OSGi templates if OSGi compatibility is enabled
-            boolean useOsgiTemplates = genModel.isOSGiCompatible();
-            Optional<String> result = runGenerator(genModel, ecoreFile.getAbsolutePath(), useOsgiTemplates);
+            Optional<String> result = runGenerator(genModel);
 
             // Delete generated files for referenced packages (they come from dependency
             // JARs)
@@ -494,42 +489,31 @@ public class EmfGenerateMojo extends AbstractMojo {
         }
     }
 
-    private Optional<String> runGenerator(GenModel genModel, String originalPath, boolean useOsgiTemplates) {
+    private Optional<String> runGenerator(GenModel genModel) {
         Generator gen = new Generator();
-        configureGenerator(gen, useOsgiTemplates);
+        configureGenerator(gen);
         gen.setInput(genModel);
 
         Map<String, Object> props = new HashMap<>();
 
-        // Determine genmodel folder - use configured location or default "model"
-        String effectiveGenmodelFolder = genmodelIncludeLocation;
-        if (effectiveGenmodelFolder == null || effectiveGenmodelFolder.isEmpty()) {
-            // Default to "model" folder, matching where model files are copied
-            if (genmodelTargetFile != null && !genmodelTargetFile.isEmpty()) {
-                int lastSlash = genmodelTargetFile.lastIndexOf('/');
-                effectiveGenmodelFolder = lastSlash > 0 ? genmodelTargetFile.substring(0, lastSlash) : "model";
-            } else {
-                effectiveGenmodelFolder = "model";
-            }
-        }
-        props.put(INCLUDE_GEN_MODEL_FOLDER, effectiveGenmodelFolder);
-        props.put(INCLUDE_ECORE_FOLDER, effectiveGenmodelFolder);
-        getLog().info("Using genmodel folder: " + effectiveGenmodelFolder);
-        getLog().info("Using ecore folder: " + effectiveGenmodelFolder);
+        // Get source filenames (not configurable - always derived from source files)
+        String ecoreFileName = ecoreFile != null ? ecoreFile.getName() : null;
+        String genmodelFileName = genmodelFile != null
+            ? genmodelFile.getName()
+            : (ecoreFileName != null ? ecoreFileName.replace(".ecore", ".genmodel") : null);
 
-        // Determine ecore bundle location
-        String effectiveEcoreBundleLocation = ecoreBundleLocation;
-        if (effectiveEcoreBundleLocation == null || effectiveEcoreBundleLocation.isEmpty()) {
-            if (ecoreTargetFile != null && !ecoreTargetFile.isEmpty()) {
-                effectiveEcoreBundleLocation = ecoreTargetFile;
-            } else if (ecoreFile != null) {
-                effectiveEcoreBundleLocation = "model/" + ecoreFile.getName();
-            }
+        // Compute effective paths by combining model folder + filename
+        effectiveEcorePath = ecoreFileName != null ? MODEL_FOLDER + "/" + ecoreFileName : null;
+        effectiveGenmodelPath = genmodelFileName != null ? MODEL_FOLDER + "/" + genmodelFileName : null;
+
+        props.put(INCLUDE_GEN_MODEL_FOLDER, MODEL_FOLDER);
+        props.put(INCLUDE_ECORE_FOLDER, MODEL_FOLDER);
+        if (effectiveEcorePath != null) {
+            props.put(ECORE_PATH, effectiveEcorePath);
         }
-        if (effectiveEcoreBundleLocation != null) {
-            props.put(ECORE_BUNDLE_LOCATION, effectiveEcoreBundleLocation);
-            getLog().info("Using ecore bundle location: " + effectiveEcoreBundleLocation);
-        }
+
+        getLog().info("Using ecore path: " + (effectiveEcorePath != null ? effectiveEcorePath : "(not set)"));
+        getLog().info("Using genmodel path: " + effectiveGenmodelPath);
 
         gen.getOptions().data = new Object[] { props };
 
@@ -576,18 +560,12 @@ public class EmfGenerateMojo extends AbstractMojo {
         loadModelsFromDependencies(resourceSet);
     }
 
-    private void configureGenerator(Generator gen, boolean useOsgiTemplates) {
+    private void configureGenerator(Generator gen) {
         // Always use the Fennec adapter factory for standalone (non-Eclipse) generation
-        // The OSGi-specific code generation is controlled by
-        // GenModel.isOSGiCompatible()
+        // The OSGi-specific code generation is controlled by GenModel.isOSGiCompatible()
         gen.getAdapterFactoryDescriptorRegistry().addDescriptor(GenModelPackage.eNS_URI,
                 BNDGeneratorAdapterFactory.DESCRIPTOR);
-
-        if (useOsgiTemplates) {
-            getLog().info("Using Fennec templates with OSGi service components");
-        } else {
-            getLog().info("Using Fennec templates (standard EMF output, no OSGi service components)");
-        }
+        getLog().info("Configured generator with Fennec adapter factory");
     }
 
     /**
@@ -782,7 +760,8 @@ public class EmfGenerateMojo extends AbstractMojo {
                 }
             }
 
-            mainGenPackage.setEcorePackage(ePackage);
+            // Note: loadInitialization is set later in generateFromEcore() right before saving
+            // to prevent EMF from overriding it during EcoreUtil.resolveAll() calls
         }
 
         return genModel;
@@ -1016,7 +995,7 @@ public class EmfGenerateMojo extends AbstractMojo {
                 // External JAR dependency
                 File file = artifact.getFile();
                 if (file != null && file.exists() && file.getName().endsWith(".jar")) {
-                    collectModelFilesFromJar(file, resourceSet, ecoreFiles, genmodelFiles);
+                    loadModelsFromJar(file, resourceSet);
                 }
             }
         }
@@ -1054,10 +1033,9 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
-     * Collect model files from a JAR dependency.
+     * Load model files from a JAR dependency.
      */
-    private void collectModelFilesFromJar(File jarFile, ResourceSet resourceSet, List<File> ecoreFiles,
-            List<File> genmodelFiles) {
+    private void loadModelsFromJar(File jarFile, ResourceSet resourceSet) {
         try (JarFile jar = new JarFile(jarFile)) {
             Enumeration<JarEntry> entries = jar.entries();
             while (entries.hasMoreElements()) {
@@ -1112,7 +1090,7 @@ public class EmfGenerateMojo extends AbstractMojo {
             if (ecoreResource != null && !ecoreResource.getContents().isEmpty()) {
                 for (org.eclipse.emf.ecore.EObject obj : ecoreResource.getContents()) {
                     if (obj instanceof EPackage ePackage) {
-                        registerEPackage(resourceSet, ePackage, "");
+                        registerEPackage(resourceSet, ePackage, " from file");
                     }
                 }
             }
@@ -1130,10 +1108,15 @@ public class EmfGenerateMojo extends AbstractMojo {
         try {
             // Determine the target path in target/classes/model
             File baseDir = project.getBasedir();
-            File targetModelDir = new File(baseDir, "target/classes/model");
+            File targetModelDir = new File(baseDir, "target/classes/" + MODEL_FOLDER);
             targetModelDir.mkdirs();
 
-            String genModelFileName = ePackage.getName() + ".genmodel";
+            // Use same base name as ecore file for genmodel
+            String ecoreName = ecoreFile.getName();
+            String baseName = ecoreName.endsWith(".ecore")
+                ? ecoreName.substring(0, ecoreName.length() - 6)
+                : ecoreName;
+            String genModelFileName = baseName + ".genmodel";
             File genModelFile = new File(targetModelDir, genModelFileName);
 
             // First, copy the ecore file to target/classes/model so relative paths work
@@ -1177,53 +1160,45 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
-     * Copies model files (ecore) to target/classes for JAR inclusion. GenModel
-     * files are generated on-the-fly directly to target/classes.
-     *
-     * Target file paths can be configured with ecoreTargetFile. If not set,
-     * defaults to "model/{filename}".
+     * Copies model files (ecore) to target/classes/model for JAR inclusion. GenModel
+     * files are generated on-the-fly directly to target/classes/model.
      */
     private void copyModelFilesToTarget() throws MojoExecutionException {
         File baseDir = project.getBasedir();
         File targetClassesDir = new File(baseDir, "target/classes");
+        File targetModelDir = new File(targetClassesDir, MODEL_FOLDER);
+        targetModelDir.mkdirs();
 
-        // Determine the model directory (from ecore or genmodel location)
-        File modelDir = null;
+        // Determine the source model directory (from ecore or genmodel location)
+        File sourceModelDir = null;
         if (ecoreFile != null && ecoreFile.exists()) {
-            modelDir = ecoreFile.getParentFile();
+            sourceModelDir = ecoreFile.getParentFile();
         } else if (genmodelFile != null && genmodelFile.exists()) {
-            modelDir = genmodelFile.getParentFile();
+            sourceModelDir = genmodelFile.getParentFile();
         }
 
-        if (modelDir == null || !modelDir.exists()) {
+        if (sourceModelDir == null || !sourceModelDir.exists()) {
             getLog().warn("Could not determine model directory. Skipping model file copying.");
             return;
         }
 
-        // Copy all ecore files from the model directory
-        File[] ecoreFiles = modelDir.listFiles((dir, name) -> name.endsWith(".ecore"));
+        // Copy all ecore files from the source model directory (keeping original filenames)
+        File[] ecoreFiles = sourceModelDir.listFiles((dir, name) -> name.endsWith(".ecore"));
         if (ecoreFiles != null) {
             for (File ef : ecoreFiles) {
-                String targetPath = (ecoreTargetFile != null && !ecoreTargetFile.isEmpty()) ? ecoreTargetFile
-                        : "model/" + ef.getName();
-                File target = new File(targetClassesDir, targetPath);
-                target.getParentFile().mkdirs();
-                copyFile(ef, target, targetPath);
+                String targetPath = MODEL_FOLDER + "/" + ef.getName();
+                copyFile(ef, new File(targetClassesDir, targetPath), targetPath);
             }
         }
 
         // In genmodel mode, copy genmodel files from the source model directory
-        // In ecore mode, genmodel is generated directly to target/classes
+        // In ecore mode, genmodel is generated directly to target/classes/model
         if (genmodelFile != null && genmodelFile.exists()) {
-            File[] genmodelFiles = modelDir.listFiles((dir, name) -> name.endsWith(".genmodel"));
+            File[] genmodelFiles = sourceModelDir.listFiles((dir, name) -> name.endsWith(".genmodel"));
             if (genmodelFiles != null) {
                 for (File gm : genmodelFiles) {
-                    String targetPath = (genmodelTargetFile != null && !genmodelTargetFile.isEmpty())
-                            ? genmodelTargetFile
-                            : "model/" + gm.getName();
-                    File target = new File(targetClassesDir, targetPath);
-                    target.getParentFile().mkdirs();
-                    copyFile(gm, target, targetPath);
+                    String targetPath = MODEL_FOLDER + "/" + gm.getName();
+                    copyFile(gm, new File(targetClassesDir, targetPath), targetPath);
                 }
             }
         }
@@ -1243,27 +1218,33 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
-     * Post-processes generated source files to remove source location attributes
-     * from @EPackage annotations. Keeps uri, genModel, and ecore but removes
-     * genModelSourceLocations and ecoreSourceLocations.
+     * Post-processes generated source files to fix paths and annotations.
+     * - Fixes @EPackage annotations (removes source locations, corrects paths)
+     * - Fixes packageFilename in PackageImpl for loadInitialization mode
      */
-    private void postProcessEPackageAnnotations(File outputDir) throws MojoExecutionException {
-        getLog().info("Post-processing @EPackage annotations to remove source locations...");
+    private void postProcessGeneratedSources(File outputDir) throws MojoExecutionException {
+        getLog().info("Post-processing generated sources in: " + outputDir.getAbsolutePath());
 
         try {
-            java.nio.file.Files.walk(outputDir.toPath()).filter(p -> p.toString().endsWith("Package.java"))
-                    .forEach(this::removeSourceLocationsFromPackageFile);
+            // Fix @EPackage annotations in Package.java files
+            java.nio.file.Files.walk(outputDir.toPath())
+                    .filter(p -> p.toString().endsWith("Package.java"))
+                    .forEach(this::fixEPackageAnnotationInFile);
+
+            // Fix packageFilename in PackageImpl.java files (for loadInitialization mode)
+            java.nio.file.Files.walk(outputDir.toPath())
+                    .filter(p -> p.toString().endsWith("PackageImpl.java"))
+                    .forEach(this::fixPackageFilenameInImpl);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to post-process generated sources", e);
         }
     }
 
     /**
-     * Removes genModelSourceLocations and ecoreSourceLocations attributes from
-     *
-     * @EPackage annotations in a single file.
+     * Fixes @EPackage annotations in a single file: removes source location
+     * attributes and corrects genModel/ecore paths.
      */
-    private void removeSourceLocationsFromPackageFile(java.nio.file.Path file) {
+    private void fixEPackageAnnotationInFile(java.nio.file.Path file) {
         try {
             String content = java.nio.file.Files.readString(file);
             String modified = content;
@@ -1274,9 +1255,54 @@ public class EmfGenerateMojo extends AbstractMojo {
             // Remove ecoreSourceLocations = "..."
             modified = modified.replaceAll(",\\s*ecoreSourceLocations\\s*=\\s*\"[^\"]*\"", "");
 
+            // Fix genModel value (remove leading slash, set correct path)
+            if (effectiveGenmodelPath != null) {
+                modified = modified.replaceAll(
+                    "genModel\\s*=\\s*\"[^\"]*\"",
+                    "genModel = \"" + effectiveGenmodelPath + "\"");
+            }
+
+            // Fix ecore value (set correct path)
+            if (effectiveEcorePath != null) {
+                modified = modified.replaceAll(
+                    "ecore\\s*=\\s*\"[^\"]*\"",
+                    "ecore = \"" + effectiveEcorePath + "\"");
+            }
+
             if (!content.equals(modified)) {
                 java.nio.file.Files.writeString(file, modified);
-                getLog().info("Removed source locations from @EPackage in: " + file.getFileName());
+                getLog().info("Fixed @EPackage annotation in: " + file.getFileName());
+            }
+        } catch (IOException e) {
+            getLog().warn("Could not process file: " + file + " - " + e.getMessage());
+        }
+    }
+
+    /**
+     * Fixes packageFilename in PackageImpl files for loadInitialization mode.
+     * EMF generates a relative path (e.g., "model.ecore") expecting the file in the impl
+     * package directory, but we place the ecore in /model/ in the JAR. This method updates
+     * the path to use an absolute classpath reference (e.g., "/model/model.ecore").
+     */
+    private void fixPackageFilenameInImpl(java.nio.file.Path file) {
+        try {
+            String content = java.nio.file.Files.readString(file);
+
+            // Check if this file has packageFilename (only present when loadInitialization=true)
+            if (!content.contains("packageFilename")) {
+                return;
+            }
+
+            // Replace the relative filename with absolute path from classpath root
+            // Pattern: packageFilename = "something.ecore"
+            // Replace with: packageFilename = "/model/something.ecore"
+            String modified = content.replaceAll(
+                "(packageFilename\\s*=\\s*\")([^\"]+\\.ecore)(\")",
+                "$1/" + MODEL_FOLDER + "/$2$3");
+
+            if (!content.equals(modified)) {
+                java.nio.file.Files.writeString(file, modified);
+                getLog().info("Fixed packageFilename in: " + file.getFileName());
             }
         } catch (IOException e) {
             getLog().warn("Could not process file: " + file + " - " + e.getMessage());
