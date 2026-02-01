@@ -117,6 +117,7 @@ import org.eclipse.fennec.emf.osgi.codegen.adapter.BNDGeneratorAdapterFactory;
 public class EmfGenerateMojo extends AbstractMojo {
 
     public static final String INCLUDE_GEN_MODEL_FOLDER = "includeGenModelFolder";
+    public static final String INCLUDE_ECORE_FOLDER = "includeEcoreFolder";
     public static final String ECORE_BUNDLE_LOCATION = "ecoreBundleLocation";
     public static final String GENMODEL_ANNOTATION_SOURCE = "http://www.eclipse.org/emf/2002/GenModel";
 
@@ -512,7 +513,9 @@ public class EmfGenerateMojo extends AbstractMojo {
             }
         }
         props.put(INCLUDE_GEN_MODEL_FOLDER, effectiveGenmodelFolder);
+        props.put(INCLUDE_ECORE_FOLDER, effectiveGenmodelFolder);
         getLog().info("Using genmodel folder: " + effectiveGenmodelFolder);
+        getLog().info("Using ecore folder: " + effectiveGenmodelFolder);
 
         // Determine ecore bundle location
         String effectiveEcoreBundleLocation = ecoreBundleLocation;
