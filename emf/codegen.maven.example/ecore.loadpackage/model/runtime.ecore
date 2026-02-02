@@ -7,6 +7,7 @@
     <details key="fileExtensions" value="runtime"/>
     <details key="resource" value="XMI"/>
     <details key="loadInitialization" value="true"/>
+    <details key="literalsInterface" value="true"/>
     <details key="copyrightText" value="Copyright (c) 2025 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0"/>
     <details key="documentation" value="Runtime model demonstrating packageFilename field generation for runtime model loading."/>
   </eAnnotations>

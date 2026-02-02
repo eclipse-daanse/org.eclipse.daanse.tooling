@@ -55,15 +55,6 @@
   </dependencies>
 
   <build>
-    <!-- Include .ecore files from generated-sources as resources (for loadInitialization=true) -->
-    <resources>
-      <resource>
-        <directory>target/generated-sources/emf</directory>
-        <includes>
-          <include>**/*.ecore</include>
-        </includes>
-      </resource>
-    </resources>
     <plugins>
       <plugin>
         <groupId>org.eclipse.daanse</groupId>
@@ -76,21 +67,12 @@
             </goals>
             <configuration>
               <!--
-                This example demonstrates:
-                1. packageFilename field generation for runtime model loading
-                2. The plugin post-processing updates packageFilename from
-                   "runtime.ecore" to "model/runtime.ecore"
-                3. Model files in a model/ folder at project root
+                This example demonstrates loadInitialization=true mode:
+                - EMF generates packageFilename = "runtime.ecore" (relative path)
+                - EMF copies the ecore to the impl directory
+                - The ecore annotation in the source model enables loadInitialization
               -->
               <ecoreFile>model/runtime.ecore</ecoreFile>
-              <outputDirectory>target/generated-sources/emf</outputDirectory>
-              <ecoreBundleLocation>model/runtime.ecore</ecoreBundleLocation>
-
-              <!-- @EPackage annotation configuration -->
-              <includeGenModelAttr>false</includeGenModelAttr>
-              <includeGenModelSourceLocationsAttr>false</includeGenModelSourceLocationsAttr>
-              <includeEcoreAttr>true</includeEcoreAttr>
-              <includeEcoreSourceLocationsAttr>false</includeEcoreSourceLocationsAttr>
             </configuration>
           </execution>
         </executions>

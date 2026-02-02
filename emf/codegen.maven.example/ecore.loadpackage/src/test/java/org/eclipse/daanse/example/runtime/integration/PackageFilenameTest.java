@@ -20,12 +20,13 @@ import org.junit.jupiter.api.Test;
 class PackageFilenameTest {
 
     @Test
-    void packageFilenameHasModelPrefix() throws Exception {
+    void packageFilenameIsRelative() throws Exception {
         Class<?> implClass = RuntimePackageImpl.class;
         Field field = implClass.getDeclaredField("packageFilename");
         field.setAccessible(true);
         Object instance = RuntimePackage.eINSTANCE;
         String value = (String) field.get(instance);
-        assertEquals("/model/runtime.ecore", value);
+        // EMF generates relative path - ecore is in same directory as impl class
+        assertEquals("runtime.ecore", value);
     }
 }

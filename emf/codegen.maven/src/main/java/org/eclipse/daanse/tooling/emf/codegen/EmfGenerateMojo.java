@@ -257,6 +257,12 @@ public class EmfGenerateMojo extends AbstractMojo {
     @Parameter(property = "emf.copyrightText")
     private String copyrightText;
 
+    /**
+     * Tracks whether loadInitialization is enabled for the current generation.
+     * When true, the generated *.ecore files need to be on the classpath at runtime.
+     */
+    private boolean loadInitializationEnabled = false;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         // Determine which mode to use
@@ -299,6 +305,17 @@ public class EmfGenerateMojo extends AbstractMojo {
 
         project.addCompileSourceRoot(outputDir.getAbsolutePath());
         getLog().info("Added " + outputDir.getAbsolutePath() + " to compile source roots");
+
+        // When loadInitialization is enabled, the generated *.ecore files in the impl
+        // directory need to be on the classpath at runtime. Add the output directory
+        // as a resource directory with includes for *.ecore files.
+        if (loadInitializationEnabled) {
+            org.apache.maven.model.Resource resource = new org.apache.maven.model.Resource();
+            resource.setDirectory(outputDir.getAbsolutePath());
+            resource.addInclude("**/*.ecore");
+            project.addResource(resource);
+            getLog().info("Added " + outputDir.getAbsolutePath() + " as resource directory for *.ecore files (loadInitialization=true)");
+        }
 
         // Copy model files (ecore, genmodel) to target/classes for JAR inclusion
         copyModelFilesToTarget();
@@ -402,6 +419,7 @@ public class EmfGenerateMojo extends AbstractMojo {
                 boolean loadInit = getGenModelAnnotationBoolean(ePackage, "loadInitialization", false);
                 mainGenPackage.setLoadInitialization(loadInit);
                 if (loadInit) {
+                    loadInitializationEnabled = true;
                     getLog().info("Setting loadInitialization: true (from annotation)");
                 } else {
                     getLog().info("Setting loadInitialization: false (default - static initialization)");
@@ -760,6 +778,13 @@ public class EmfGenerateMojo extends AbstractMojo {
                 }
             }
 
+            // literalsInterface
+            boolean effectiveLiteralsInterface = getGenModelAnnotationBoolean(ePackage, "literalsInterface", true);
+            mainGenPackage.setLiteralsInterface(effectiveLiteralsInterface);
+            if (!effectiveLiteralsInterface) {
+                getLog().info("Setting literalsInterface: false (from annotation)");
+            }
+
             // Note: loadInitialization is set later in generateFromEcore() right before saving
             // to prevent EMF from overriding it during EcoreUtil.resolveAll() calls
         }
@@ -940,6 +965,10 @@ public class EmfGenerateMojo extends AbstractMojo {
         if (fileExt != null && !fileExt.isEmpty()) {
             genPackage.setFileExtensions(fileExt);
         }
+
+        // literalsInterface
+        boolean literalsInterface = getGenModelAnnotationBoolean(ePackage, "literalsInterface", true);
+        genPackage.setLiteralsInterface(literalsInterface);
     }
 
     /**
@@ -1231,10 +1260,9 @@ public class EmfGenerateMojo extends AbstractMojo {
                     .filter(p -> p.toString().endsWith("Package.java"))
                     .forEach(this::fixEPackageAnnotationInFile);
 
-            // Fix packageFilename in PackageImpl.java files (for loadInitialization mode)
-            java.nio.file.Files.walk(outputDir.toPath())
-                    .filter(p -> p.toString().endsWith("PackageImpl.java"))
-                    .forEach(this::fixPackageFilenameInImpl);
+            // Note: packageFilename is NOT modified - EMF handles this correctly by:
+            // 1. Generating packageFilename = "actual-name.ecore" (relative path)
+            // 2. Copying the ecore file to the impl directory
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to post-process generated sources", e);
         }
@@ -1272,37 +1300,6 @@ public class EmfGenerateMojo extends AbstractMojo {
             if (!content.equals(modified)) {
                 java.nio.file.Files.writeString(file, modified);
                 getLog().info("Fixed @EPackage annotation in: " + file.getFileName());
-            }
-        } catch (IOException e) {
-            getLog().warn("Could not process file: " + file + " - " + e.getMessage());
-        }
-    }
-
-    /**
-     * Fixes packageFilename in PackageImpl files for loadInitialization mode.
-     * EMF generates a relative path (e.g., "model.ecore") expecting the file in the impl
-     * package directory, but we place the ecore in /model/ in the JAR. This method updates
-     * the path to use an absolute classpath reference (e.g., "/model/model.ecore").
-     */
-    private void fixPackageFilenameInImpl(java.nio.file.Path file) {
-        try {
-            String content = java.nio.file.Files.readString(file);
-
-            // Check if this file has packageFilename (only present when loadInitialization=true)
-            if (!content.contains("packageFilename")) {
-                return;
-            }
-
-            // Replace the relative filename with absolute path from classpath root
-            // Pattern: packageFilename = "something.ecore"
-            // Replace with: packageFilename = "/model/something.ecore"
-            String modified = content.replaceAll(
-                "(packageFilename\\s*=\\s*\")([^\"]+\\.ecore)(\")",
-                "$1/" + MODEL_FOLDER + "/$2$3");
-
-            if (!content.equals(modified)) {
-                java.nio.file.Files.writeString(file, modified);
-                getLog().info("Fixed packageFilename in: " + file.getFileName());
             }
         } catch (IOException e) {
             getLog().warn("Could not process file: " + file + " - " + e.getMessage());
