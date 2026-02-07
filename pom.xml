@@ -53,5 +53,6 @@
     <module>dockerjava</module>
     <module>emf</module>
     <module>testcontainers</module>
+    <module>docgen</module>
   </modules>
 </project>

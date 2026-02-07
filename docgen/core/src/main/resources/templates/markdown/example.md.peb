@@ -1,0 +1,27 @@
+# {{ example.title }}
+
+{{ example.description }}
+{%- if example.steps is not empty %}
+{%- for step in example.steps %}
+
+## {{ step.title }}
+
+{{ step.description }}
+
+```java
+{{ step.code }}
+```
+{%- if step.expectedOutput is not empty %}
+
+**Expected Output:**
+```
+{{ step.expectedOutput }}
+```
+{%- endif %}
+{%- endfor %}
+{%- else %}
+
+```java
+{{ example.classCode }}
+```
+{%- endif %}
