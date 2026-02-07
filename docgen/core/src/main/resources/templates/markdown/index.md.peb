@@ -1,0 +1,9 @@
+# {{ site.projectName }}
+
+{{ site.projectDescription }}
+
+## Examples
+{%- for example in examples %}
+
+- [{{ example.title }}]({{ example.id }}.md) — {{ example.description }}
+{%- endfor %}
