@@ -35,7 +35,7 @@
 	bnd.identity;id='${project.artifactId}'
 
 -runbundles+: \
-    org.eclipse.fennec.emf.osgi.component;startlevel=10
+	org.eclipse.fennec.emf.osgi.component;startlevel=10
 
 # -runbundles is calculated by the bnd-resolver-maven-plugin
 -runbundles: \
