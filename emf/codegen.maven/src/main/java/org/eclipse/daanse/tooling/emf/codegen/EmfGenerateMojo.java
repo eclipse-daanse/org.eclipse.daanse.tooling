@@ -19,7 +19,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -592,16 +595,13 @@ public class EmfGenerateMojo extends AbstractMojo {
      * generation.
      */
     private void addUsedGenPackagesFromDependencies(GenModel genModel) {
-        // Collect all nsURIs of packages already in the GenModel
+        // Collect all nsURIs of packages already in the GenModel (including nested)
         Set<String> ownPackageNsURIs = new HashSet<>();
         for (GenPackage genPackage : genModel.getGenPackages()) {
-            EPackage ePackage = genPackage.getEcorePackage();
-            if (ePackage != null && ePackage.getNsURI() != null) {
-                ownPackageNsURIs.add(ePackage.getNsURI());
-            }
+            collectOwnNsURIsRecursive(genPackage, ownPackageNsURIs);
         }
 
-        // Find all referenced external packages
+        // Find all referenced external packages (walking own EPackage hierarchy recursively)
         Set<String> referencedNsURIs = new HashSet<>();
         for (GenPackage genPackage : genModel.getGenPackages()) {
             EPackage ePackage = genPackage.getEcorePackage();
@@ -610,23 +610,52 @@ public class EmfGenerateMojo extends AbstractMojo {
             }
         }
 
-        // Add GenPackages from the registry for all referenced external packages
+        // Add GenPackages from the registry for all referenced external packages.
+        // For nested externals (e.g. CWM's resource/relational), we also need to
+        // attach the *top-level* external GenPackage to usedGenPackages so the EMF
+        // codegen reaches the nested one via getSubGenPackages().
+        Set<GenPackage> toAttach = new LinkedHashSet<>();
         for (String nsURI : referencedNsURIs) {
             GenPackage externalGenPackage = genPackageRegistry.get(nsURI);
             if (externalGenPackage != null) {
-                if (!genModel.getUsedGenPackages().contains(externalGenPackage)) {
-                    genModel.getUsedGenPackages().add(externalGenPackage);
-                    getLog().info("Added usedGenPackage for external reference: " + externalGenPackage.getPackageName()
-                            + " (" + nsURI + ")");
-                }
+                toAttach.add(rootGenPackage(externalGenPackage));
             } else {
                 getLog().warn("No GenPackage found for referenced external package: " + nsURI);
             }
         }
+        for (GenPackage gp : toAttach) {
+            if (!genModel.getUsedGenPackages().contains(gp)) {
+                genModel.getUsedGenPackages().add(gp);
+                String nsURI = gp.getEcorePackage() != null ? gp.getEcorePackage().getNsURI() : "?";
+                getLog().info("Added usedGenPackage for external reference: " + gp.getPackageName()
+                        + " (" + nsURI + ")");
+            }
+        }
+    }
+
+    /** Collect nsURIs of a GenPackage and all nested sub-GenPackages. */
+    private void collectOwnNsURIsRecursive(GenPackage genPackage, Set<String> out) {
+        EPackage ePackage = genPackage.getEcorePackage();
+        if (ePackage != null && ePackage.getNsURI() != null) {
+            out.add(ePackage.getNsURI());
+        }
+        for (GenPackage sub : genPackage.getSubGenPackages()) {
+            collectOwnNsURIsRecursive(sub, out);
+        }
+    }
+
+    /** Walks up the GenPackage tree to the top-level GenPackage. */
+    private GenPackage rootGenPackage(GenPackage gp) {
+        GenPackage current = gp;
+        while (current.eContainer() instanceof GenPackage parent) {
+            current = parent;
+        }
+        return current;
     }
 
     /**
-     * Collects nsURIs of external packages referenced by the given EPackage.
+     * Collects nsURIs of external packages referenced by the given EPackage and
+     * all its sub-packages.
      */
     private void collectReferencedExternalNsURIs(EPackage ePackage, Set<String> ownPackageNsURIs,
             Set<String> referencedNsURIs) {
@@ -645,6 +674,11 @@ public class EmfGenerateMojo extends AbstractMojo {
                     }
                 }
             }
+        }
+        // Recurse into sub-packages of our own model, in case nested packages
+        // reference external classes too.
+        for (EPackage sub : ePackage.getESubpackages()) {
+            collectReferencedExternalNsURIs(sub, ownPackageNsURIs, referencedNsURIs);
         }
     }
 
@@ -708,27 +742,74 @@ public class EmfGenerateMojo extends AbstractMojo {
         // from the registry (for referenced packages like bi and cg)
         EcoreUtil.resolveAll(ePackage);
 
-        // Find referenced external packages
+        // Find referenced external packages (transitively)
         Set<EPackage> referencedPackages = findReferencedExternalPackages(ePackage);
+        for (EPackage ref : referencedPackages) {
+            getLog().info("Referenced external package: " + ref.getName() + " (" + ref.getNsURI() + ")");
+        }
 
-        // Initialize GenModel with ALL packages (main + referenced) in the same
-        // GenModel
-        // This is required because findGenClassifier needs all packages in the same
-        // GenModel
-        // to correctly resolve type references for code generation
+        // Initialize GenModel with ALL packages (main + referenced) — EMF still
+        // needs the external GenPackages in the same GenModel initially so that
+        // findGenClassifier can resolve type references during code generation.
         List<EPackage> allPackages = new ArrayList<>();
         allPackages.add(ePackage);
         allPackages.addAll(referencedPackages);
         genModel.initialize(allPackages);
 
-        // Configure referenced GenPackages (indices 1+) so they don't generate code
-        // but are still available for findGenClassifier
+        // Configure referenced GenPackages (indices 1+) and MOVE them from
+        // getGenPackages() to getUsedGenPackages() — this prevents EMF from
+        // (re-)generating Java code for the external types (those classes already
+        // exist in their owning project's JAR). Keep them reachable via the
+        // "used" list so findGenClassifier still works.
+        List<GenPackage> externals = new ArrayList<>();
         for (int i = 1; i < genModel.getGenPackages().size(); i++) {
-            GenPackage refGenPackage = genModel.getGenPackages().get(i);
+            externals.add(genModel.getGenPackages().get(i));
+        }
+        for (GenPackage refGenPackage : externals) {
             EPackage refEPackage = refGenPackage.getEcorePackage();
             configureGenPackageFromAnnotations(refGenPackage, refEPackage);
+            // If the external EPackage is a NESTED sub-package that does NOT carry
+            // its own basePackage annotation, infer basePackage from the top-level
+            // ancestor's annotation plus the sub-package name chain. Matches how
+            // the owning project generated code (e.g. CWM's
+            // org.eclipse.daanse.cwm.model.emf.org.omg.cwm.resource.relational).
+            if (getGenModelAnnotation(refEPackage, "basePackage") == null) {
+                String nestedBase = computeNestedBasePackage(refEPackage);
+                if (nestedBase != null) {
+                    refGenPackage.setBasePackage(nestedBase);
+                }
+            }
             getLog().info("Configured referenced GenPackage (no code gen): " + refGenPackage.getPackageName() + " ("
-                    + refEPackage.getNsURI() + ")");
+                    + refEPackage.getNsURI() + ") basePackage=" + refGenPackage.getBasePackage());
+        }
+        if (!externals.isEmpty()) {
+            // Move externals into a sibling GenModel stored in target/classes/model
+            // so the main genmodel's <usedGenPackages> hrefs resolve to a real file
+            // URI during subsequent code-generation.
+            GenModel externalModel = GenModelFactory.eINSTANCE.createGenModel();
+            externalModel.setModelName("External");
+            String ecoreName = ecoreFile.getName();
+            String baseName = ecoreName.endsWith(".ecore")
+                ? ecoreName.substring(0, ecoreName.length() - 6)
+                : ecoreName;
+            File extFile = new File(project.getBasedir(), "target/classes/" + MODEL_FOLDER
+                + "/" + baseName + "-external.genmodel");
+            extFile.getParentFile().mkdirs();
+            URI externalUri = URI.createFileURI(extFile.getAbsolutePath());
+            Resource externalResource = resourceSet.createResource(externalUri);
+            if (externalResource != null) {
+                externalResource.getContents().add(externalModel);
+            }
+            genModel.getGenPackages().removeAll(externals);
+            externalModel.getGenPackages().addAll(externals);
+            genModel.getUsedGenPackages().addAll(externals);
+            // Save the external genmodel to disk so hrefs resolve during codegen.
+            try {
+                externalResource.save(java.util.Collections.emptyMap());
+                getLog().info("Saved external GenModel to target/classes: " + extFile.getAbsolutePath());
+            } catch (java.io.IOException ioe) {
+                getLog().warn("Could not save external GenModel: " + ioe.getMessage());
+            }
         }
 
         // Resolve all references in the GenModel
@@ -861,16 +942,59 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     private Set<EPackage> findReferencedExternalPackages(EPackage ePackage) {
-        Set<EPackage> referenced = new HashSet<>();
-        String mainNsURI = ePackage.getNsURI();
+        Set<String> ownNsURIs = new HashSet<>();
+        collectAllNsURIs(ePackage, ownNsURIs);
 
+        Set<EPackage> referenced = new LinkedHashSet<>();
+        // Collect direct references from our own model (walking own subpackages too)
+        collectDirectExternalRefs(ePackage, ownNsURIs, referenced);
+
+        // Transitively follow references from external packages we already pulled in,
+        // so that e.g. CWM's relational package brings along objectmodel/core (Schema
+        // extends core::Package, Table extends NamedColumnSet extends ColumnSet
+        // extends core::Class, etc.).
+        Deque<EPackage> worklist = new ArrayDeque<>(referenced);
+        Set<String> visitedExternal = new HashSet<>();
+        for (EPackage p : referenced) {
+            visitedExternal.add(p.getNsURI());
+        }
+        while (!worklist.isEmpty()) {
+            EPackage ext = worklist.poll();
+            Set<EPackage> next = new LinkedHashSet<>();
+            collectDirectExternalRefs(ext, ownNsURIs, next);
+            for (EPackage e : next) {
+                if (visitedExternal.add(e.getNsURI())) {
+                    referenced.add(e);
+                    worklist.add(e);
+                }
+            }
+        }
+        return referenced;
+    }
+
+    /** Collect nsURIs of the ePackage and all its nested sub-packages. */
+    private void collectAllNsURIs(EPackage ePackage, Set<String> out) {
+        if (ePackage.getNsURI() != null) {
+            out.add(ePackage.getNsURI());
+        }
+        for (EPackage sub : ePackage.getESubpackages()) {
+            collectAllNsURIs(sub, out);
+        }
+    }
+
+    /**
+     * Direct (non-transitive) scan: collects EPackages referenced from ePackage
+     * and its sub-packages whose nsURI is not in {@code ownNsURIs} and not an
+     * EMF-core package.
+     */
+    private void collectDirectExternalRefs(EPackage ePackage, Set<String> ownNsURIs, Set<EPackage> out) {
         for (EClassifier classifier : ePackage.getEClassifiers()) {
             if (classifier instanceof EClass eClass) {
                 for (EClass superClass : eClass.getESuperTypes()) {
                     EPackage superPackage = superClass.getEPackage();
-                    if (superPackage != null && !mainNsURI.equals(superPackage.getNsURI())
+                    if (superPackage != null && !ownNsURIs.contains(superPackage.getNsURI())
                             && !isEMFCorePackage(superPackage.getNsURI())) {
-                        referenced.add(superPackage);
+                        out.add(superPackage);
                     }
                 }
 
@@ -878,15 +1002,17 @@ public class EmfGenerateMojo extends AbstractMojo {
                     EClassifier featureType = feature.getEType();
                     if (featureType != null) {
                         EPackage featurePackage = featureType.getEPackage();
-                        if (featurePackage != null && !mainNsURI.equals(featurePackage.getNsURI())
+                        if (featurePackage != null && !ownNsURIs.contains(featurePackage.getNsURI())
                                 && !isEMFCorePackage(featurePackage.getNsURI())) {
-                            referenced.add(featurePackage);
+                            out.add(featurePackage);
                         }
                     }
                 }
             }
         }
-        return referenced;
+        for (EPackage sub : ePackage.getESubpackages()) {
+            collectDirectExternalRefs(sub, ownNsURIs, out);
+        }
     }
 
     private boolean isEMFCorePackage(String nsURI) {
@@ -940,6 +1066,41 @@ public class EmfGenerateMojo extends AbstractMojo {
     }
 
     /**
+     * For a potentially nested external EPackage, computes the Java package that
+     * matches how the owning project generates code. Walks the eContainer() chain
+     * to the top-level EPackage, reads its {@code basePackage} GenModel annotation,
+     * and appends the names of each intermediate sub-package.
+     *
+     * Returns null when the EPackage is top-level or when no basePackage annotation
+     * is found; the caller will then fall back to the default logic.
+     */
+    private String computeNestedBasePackage(EPackage ePackage) {
+        if (!(ePackage.eContainer() instanceof EPackage)) {
+            return null;
+        }
+        // Walk up to the top-level EPackage, collecting names. The top-level's
+        // basePackage annotation gives us the anchor; everything between (including
+        // the top-level name itself) becomes path segments. We intentionally skip
+        // the ePackage's own name — EMF's codegen appends the GenPackage's
+        // packageName to basePackage when computing the Java package for classes.
+        List<String> pathSegments = new ArrayList<>();
+        EPackage cur = ePackage;
+        while (cur.eContainer() instanceof EPackage parent) {
+            pathSegments.add(0, parent.getName());
+            cur = parent;
+        }
+        String topBase = getGenModelAnnotation(cur, "basePackage");
+        if (topBase == null || topBase.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(topBase);
+        for (String n : pathSegments) {
+            sb.append('.').append(n);
+        }
+        return sb.toString();
+    }
+
+    /**
      * Configures a GenPackage from EPackage GenModel annotations. Sets basePackage,
      * prefix, and fileExtensions based on annotations or derived values.
      */
@@ -981,21 +1142,25 @@ public class EmfGenerateMojo extends AbstractMojo {
      */
     private void registerEPackage(ResourceSet resourceSet, EPackage ePackage, String source) {
         String nsURI = ePackage.getNsURI();
-        if (nsURI == null || EPackage.Registry.INSTANCE.containsKey(nsURI)) {
-            return;
+        if (nsURI != null && !EPackage.Registry.INSTANCE.containsKey(nsURI)) {
+            EPackage.Registry.INSTANCE.put(nsURI, ePackage);
+            resourceSet.getPackageRegistry().put(nsURI, ePackage);
+            getLog().info("Registered EPackage" + source + ": " + ePackage.getName() + " (" + nsURI + ")");
+
+            // Also create and register a GenPackage if GenModel annotations are present
+            if (!genPackageRegistry.containsKey(nsURI)) {
+                GenPackage genPackage = createGenPackageFromEcore(resourceSet, ePackage);
+                if (genPackage != null) {
+                    genPackageRegistry.put(nsURI, genPackage);
+                    getLog().info("Created GenPackage" + source + ": " + genPackage.getPackageName() + " (" + nsURI + ")");
+                }
+            }
         }
 
-        EPackage.Registry.INSTANCE.put(nsURI, ePackage);
-        resourceSet.getPackageRegistry().put(nsURI, ePackage);
-        getLog().info("Registered EPackage" + source + ": " + ePackage.getName() + " (" + nsURI + ")");
-
-        // Also create and register a GenPackage if GenModel annotations are present
-        if (!genPackageRegistry.containsKey(nsURI)) {
-            GenPackage genPackage = createGenPackageFromEcore(resourceSet, ePackage);
-            if (genPackage != null) {
-                genPackageRegistry.put(nsURI, genPackage);
-                getLog().info("Created GenPackage" + source + ": " + genPackage.getPackageName() + " (" + nsURI + ")");
-            }
+        // Recurse into sub-packages so that nested nsURIs (e.g. CWM's
+        // resource/relational, objectmodel/core) are registered too.
+        for (EPackage sub : ePackage.getESubpackages()) {
+            registerEPackage(resourceSet, sub, source);
         }
     }
 
@@ -1342,18 +1507,31 @@ public class EmfGenerateMojo extends AbstractMojo {
                     if (obj instanceof GenModel genModel) {
                         EcoreUtil.resolveAll(genModel);
                         for (GenPackage genPackage : genModel.getGenPackages()) {
-                            EPackage ePackage = genPackage.getEcorePackage();
-                            if (ePackage != null && ePackage.getNsURI() != null) {
-                                genPackageRegistry.put(ePackage.getNsURI(), genPackage);
-                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " ("
-                                        + ePackage.getNsURI() + ")");
-                            }
+                            registerGenPackageRecursive(genPackage);
                         }
                     }
                 }
             }
         } catch (Exception e) {
             getLog().debug("Could not load GenModel: " + genmodelFile.getAbsolutePath() + " - " + e.getMessage());
+        }
+    }
+
+    /**
+     * Registers a GenPackage and all its nested sub-GenPackages in the registry.
+     * Needed because GenModels such as CWM use deeply nested EPackage hierarchies
+     * (e.g. {@code http://www.omg.org/spec/CWM/1.1/resource/relational}) and
+     * external references point at the nested nsURIs, not only the top-level one.
+     */
+    private void registerGenPackageRecursive(GenPackage genPackage) {
+        EPackage ePackage = genPackage.getEcorePackage();
+        if (ePackage != null && ePackage.getNsURI() != null
+                && !genPackageRegistry.containsKey(ePackage.getNsURI())) {
+            genPackageRegistry.put(ePackage.getNsURI(), genPackage);
+            getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " (" + ePackage.getNsURI() + ")");
+        }
+        for (GenPackage sub : genPackage.getSubGenPackages()) {
+            registerGenPackageRecursive(sub);
         }
     }
 
@@ -1382,12 +1560,7 @@ public class EmfGenerateMojo extends AbstractMojo {
                     if (obj instanceof GenModel genModel) {
                         EcoreUtil.resolveAll(genModel);
                         for (GenPackage genPackage : genModel.getGenPackages()) {
-                            EPackage ePackage = genPackage.getEcorePackage();
-                            if (ePackage != null && ePackage.getNsURI() != null) {
-                                genPackageRegistry.put(ePackage.getNsURI(), genPackage);
-                                getLog().info("Registered GenPackage: " + genPackage.getPackageName() + " ("
-                                        + ePackage.getNsURI() + ")");
-                            }
+                            registerGenPackageRecursive(genPackage);
                         }
                     }
                 }

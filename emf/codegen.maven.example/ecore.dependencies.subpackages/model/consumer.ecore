@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="consumer" nsURI="http://daanse.eclipse.org/example/consumer"
+    nsPrefix="consumer">
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="basePackage" value="org.eclipse.daanse.example.consumer"/>
+    <details key="prefix" value="Consumer"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="UsesAlpha" eSuperTypes="http://daanse.eclipse.org/example/nested/a/b#//a/Alpha"/>
+  <eClassifiers xsi:type="ecore:EClass" name="UsesBeta" eSuperTypes="http://daanse.eclipse.org/example/nested/a/b#//a/b/Beta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="peer" eType="ecore:EClass http://daanse.eclipse.org/example/nested/a/b#//a/b/Beta"/>
+  </eClassifiers>
+</ecore:EPackage>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="nested" nsURI="http://daanse.eclipse.org/example/nested" nsPrefix="nested">
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="basePackage" value="org.eclipse.daanse.example.nested"/>
+    <details key="prefix" value="Nested"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="Root">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
+  <eSubpackages name="a" nsURI="http://daanse.eclipse.org/example/nested/a" nsPrefix="a">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="basePackage" value="org.eclipse.daanse.example.nested"/>
+      <details key="prefix" value="A"/>
+    </eAnnotations>
+    <eClassifiers xsi:type="ecore:EClass" name="Alpha">
+      <eStructuralFeatures xsi:type="ecore:EAttribute" name="label" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    </eClassifiers>
+    <eSubpackages name="b" nsURI="http://daanse.eclipse.org/example/nested/a/b" nsPrefix="b">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="basePackage" value="org.eclipse.daanse.example.nested"/>
+        <details key="prefix" value="B"/>
+      </eAnnotations>
+      <eClassifiers xsi:type="ecore:EClass" name="Beta" eSuperTypes="#//a/Alpha">
+        <eStructuralFeatures xsi:type="ecore:EAttribute" name="payload" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      </eClassifiers>
+    </eSubpackages>
+  </eSubpackages>
+</ecore:EPackage>
