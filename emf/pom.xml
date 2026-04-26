@@ -34,11 +34,4 @@
     <module>codegen.maven.example</module>
   </modules>
 
-  <repositories>
-    <repository>
-      <id>eclipse-releases</id>
-      <url>https://repo.eclipse.org/content/repositories/releases/</url>
-    </repository>
-  </repositories>
-
 </project>
