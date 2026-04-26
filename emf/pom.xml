@@ -31,7 +31,7 @@
 
   <modules>
     <module>codegen.maven</module>
-<!--    <module>codegen.maven.example</module>-->
+    <module>codegen.maven.example</module>
   </modules>
 
 </project>
