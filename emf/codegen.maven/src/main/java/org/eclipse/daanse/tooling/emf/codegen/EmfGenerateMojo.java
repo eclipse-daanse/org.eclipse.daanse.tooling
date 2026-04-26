@@ -1194,14 +1194,16 @@ public class EmfGenerateMojo extends AbstractMojo {
             }
         }
 
-        // Load ecore files first (to register EPackages)
-        for (File ecoreFile : ecoreFiles) {
-            loadEcoreFromFile(resourceSet, ecoreFile);
-        }
-
-        // Then load genmodel files (which reference the EPackages)
+        // Load genmodel files BEFORE ecore files. The genmodel is the
+        // authoritative source of GenPackage wiring; loading the ecore first
+        // would synthesize an empty GenPackage and shadow the real one, leaving
+        // GenClassifier lookups null during codegen.
         for (File genmodelFile : genmodelFiles) {
             loadGenModelFromFile(resourceSet, genmodelFile);
+        }
+
+        for (File ecoreFile : ecoreFiles) {
+            loadEcoreFromFile(resourceSet, ecoreFile);
         }
     }
 
@@ -1228,20 +1230,36 @@ public class EmfGenerateMojo extends AbstractMojo {
 
     /**
      * Load model files from a JAR dependency.
+     *
+     * Genmodel entries are loaded BEFORE ecore entries: the loaded genmodel is the
+     * authoritative source of GenPackage wiring (basePackage, GenClasses, etc.).
+     * If we loaded the ecore first, {@link #registerEPackage} would synthesize an
+     * empty GenPackage via {@link #createGenPackageFromEcore} and then
+     * {@link #registerGenPackageRecursive} would skip the real one because the
+     * nsURI is already present — producing GenPackages with null instanceTypeName
+     * and null GenClassifier lookups during codegen.
      */
     private void loadModelsFromJar(File jarFile, ResourceSet resourceSet) {
         try (JarFile jar = new JarFile(jarFile)) {
+            List<String> ecoreEntries = new ArrayList<>();
+            List<String> genmodelEntries = new ArrayList<>();
             Enumeration<JarEntry> entries = jar.entries();
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
                 if (isModelPath(name)) {
-                    if (name.endsWith(".ecore")) {
-                        loadEcoreFromJar(resourceSet, jarFile, name);
-                    } else if (name.endsWith(".genmodel")) {
-                        loadGenModelFromJar(resourceSet, jarFile, name);
+                    if (name.endsWith(".genmodel")) {
+                        genmodelEntries.add(name);
+                    } else if (name.endsWith(".ecore")) {
+                        ecoreEntries.add(name);
                     }
                 }
+            }
+            for (String name : genmodelEntries) {
+                loadGenModelFromJar(resourceSet, jarFile, name);
+            }
+            for (String name : ecoreEntries) {
+                loadEcoreFromJar(resourceSet, jarFile, name);
             }
         } catch (IOException e) {
             getLog().debug("Could not scan JAR for model files: " + jarFile.getName());
