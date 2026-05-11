@@ -40,6 +40,7 @@
     <!-- Modules with dependencies (must be built after their dependencies) -->
     <module>ecore.dependencies</module>
     <module>ecore.dependencies.subpackages</module>
+    <module>ecore.dependencies.subpackages.consumer.subpackages</module>
     <module>genmodel.dependencies</module>
   </modules>
 

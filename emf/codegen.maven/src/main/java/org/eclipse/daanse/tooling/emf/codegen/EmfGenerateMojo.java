@@ -40,6 +40,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.emf.codegen.ecore.generator.Generator;
+import org.eclipse.emf.codegen.ecore.genmodel.GenClassifier;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModel;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModelFactory;
 import org.eclipse.emf.codegen.ecore.genmodel.GenModelPackage;
@@ -127,6 +128,18 @@ public class EmfGenerateMojo extends AbstractMojo {
      * Fixed directory path where model files (ecore, genmodel) are placed in the JAR.
      */
     private static final String MODEL_FOLDER = "model";
+
+    /**
+     * Tracks every nsURI this plugin has put into {@link EPackage.Registry#INSTANCE}
+     * across mojo invocations in the same JVM. At the start of each invocation we
+     * remove these entries so that the next module starts with a clean view: its
+     * fresh ResourceSet's package registry no longer reports {@code containsKey=true}
+     * via the delegate for nsURIs registered by an earlier session, and EMF's proxy
+     * resolution can find the freshly loaded EPackages instead of stale ones.
+     * Static so it survives the per-lookup mojo instantiation strategy.
+     */
+    private static final java.util.Set<String> pluginRegisteredNsURIs =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
     /**
      * Registry mapping EPackage nsURI to GenPackage for dependency resolution.
@@ -429,8 +442,24 @@ public class EmfGenerateMojo extends AbstractMojo {
                 }
             }
 
+            getLog().info("Before saveGenModelToResources: getGenPackages=" + genModel.getGenPackages().size()
+                    + " usedGenPackages=" + genModel.getUsedGenPackages().size());
+
             // Save the GenModel to resources for inclusion in JAR
             saveGenModelToResources(genModel, ePackage);
+
+            getLog().info("After saveGenModelToResources: getGenPackages=" + genModel.getGenPackages().size()
+                    + " usedGenPackages=" + genModel.getUsedGenPackages().size());
+
+            // Verbose diagnostic — only emitted under -X (debug). Dumps the genmodel's
+            // GenPackage tree and probes every EClassifier referenced from main to
+            // verify it's resolvable. Skips EMF's protected findGenClassifier
+            // (reflective invocation has been seen to perturb XMI parser state for
+            // very large models like CWM).
+            if (getLog().isDebugEnabled()) {
+                debugDumpGenModel(genModel);
+                debugProbeFindGenClassifier(genModel, ePackage);
+            }
 
             // Collect referenced package names (to delete their generated files after
             // generation)
@@ -567,6 +596,24 @@ public class EmfGenerateMojo extends AbstractMojo {
 
         // Clear the genPackageRegistry for a fresh run
         genPackageRegistry.clear();
+
+        // Drop nsURIs this plugin previously registered into the JVM-global
+        // EPackage.Registry.INSTANCE in earlier mojo invocations within the same
+        // Maven session. Without this, ResourceSetImpl#getPackageRegistry()'s
+        // delegation would report containsKey=true for those nsURIs, the local
+        // map would never be populated, and EMF cross-ref resolution would walk
+        // stale EClassifier instances detached from this module's resourceSet —
+        // surfacing as findGenClassifier() == null deep inside codegen.
+        synchronized (pluginRegisteredNsURIs) {
+            if (!pluginRegisteredNsURIs.isEmpty()) {
+                getLog().info("Removing " + pluginRegisteredNsURIs.size()
+                        + " stale nsURIs from EPackage.Registry.INSTANCE (from earlier mojo invocations in this JVM)");
+                for (String nsURI : pluginRegisteredNsURIs) {
+                    EPackage.Registry.INSTANCE.remove(nsURI);
+                }
+                pluginRegisteredNsURIs.clear();
+            }
+        }
 
         resourceSet.getResourceFactoryRegistry().getContentTypeToFactoryMap().put(GenModelPackage.eCONTENT_TYPE,
                 new XMIResourceFactoryImpl());
@@ -745,7 +792,8 @@ public class EmfGenerateMojo extends AbstractMojo {
         // Find referenced external packages (transitively)
         Set<EPackage> referencedPackages = findReferencedExternalPackages(ePackage);
         for (EPackage ref : referencedPackages) {
-            getLog().info("Referenced external package: " + ref.getName() + " (" + ref.getNsURI() + ")");
+            getLog().info("Referenced external package: " + ref.getName() + " (" + ref.getNsURI() + ") with "
+                    + ref.getEClassifiers().size() + " EClassifiers");
         }
 
         // Initialize GenModel with ALL packages (main + referenced) — EMF still
@@ -755,6 +803,22 @@ public class EmfGenerateMojo extends AbstractMojo {
         allPackages.add(ePackage);
         allPackages.addAll(referencedPackages);
         genModel.initialize(allPackages);
+
+        getLog().info("After genModel.initialize, GenPackages count: " + genModel.getGenPackages().size());
+        if (getLog().isDebugEnabled()) {
+            for (GenPackage gp : genModel.getGenPackages()) {
+                EPackage ep = gp.getEcorePackage();
+                getLog().debug("  top-level GenPackage: " + gp.getPackageName() + " ("
+                        + (ep != null ? ep.getNsURI() : "null") + ") classifiers="
+                        + gp.getGenClassifiers().size() + " sub=" + gp.getSubGenPackages().size());
+                for (GenPackage sub : gp.getSubGenPackages()) {
+                    EPackage sep = sub.getEcorePackage();
+                    getLog().debug("      sub GenPackage: " + sub.getPackageName() + " ("
+                            + (sep != null ? sep.getNsURI() : "null") + ") classifiers="
+                            + sub.getGenClassifiers().size());
+                }
+            }
+        }
 
         // Configure referenced GenPackages (indices 1+) and MOVE them from
         // getGenPackages() to getUsedGenPackages() — this prevents EMF from
@@ -1142,12 +1206,24 @@ public class EmfGenerateMojo extends AbstractMojo {
      */
     private void registerEPackage(ResourceSet resourceSet, EPackage ePackage, String source) {
         String nsURI = ePackage.getNsURI();
-        if (nsURI != null && !EPackage.Registry.INSTANCE.containsKey(nsURI)) {
-            EPackage.Registry.INSTANCE.put(nsURI, ePackage);
-            resourceSet.getPackageRegistry().put(nsURI, ePackage);
-            getLog().info("Registered EPackage" + source + ": " + ePackage.getName() + " (" + nsURI + ")");
+        if (nsURI != null) {
+            // Putting into EPackage.Registry.INSTANCE happens only the first time
+            // a session sees this nsURI. The resourceSet.getPackageRegistry() also
+            // gets the freshly loaded ePackage on first encounter. ResourceSet
+            // PackageRegistry delegates to INSTANCE for misses, so subsequent
+            // sessions would otherwise short-circuit on the stale INSTANCE entry.
+            if (!EPackage.Registry.INSTANCE.containsKey(nsURI)) {
+                EPackage.Registry.INSTANCE.put(nsURI, ePackage);
+                pluginRegisteredNsURIs.add(nsURI);
+                resourceSet.getPackageRegistry().put(nsURI, ePackage);
+                getLog().info("Registered EPackage" + source + ": " + ePackage.getName() + " (" + nsURI + ")");
+            }
 
-            // Also create and register a GenPackage if GenModel annotations are present
+            // Populate the per-mojo GenPackage registry independently of the JVM-global
+            // EPackage.Registry. The latter persists across modules in the same Maven
+            // session, so on the second consumer module the outer guard would
+            // short-circuit and leave genPackageRegistry empty — breaking cross-package
+            // codegen lookups (manifests as NPE in getPackageFamilyTreeDependencies).
             if (!genPackageRegistry.containsKey(nsURI)) {
                 GenPackage genPackage = createGenPackageFromEcore(resourceSet, ePackage);
                 if (genPackage != null) {
@@ -1607,6 +1683,126 @@ public class EmfGenerateMojo extends AbstractMojo {
     /**
      * Recursively deletes a directory and all its contents.
      */
+    private void debugDumpGenModel(GenModel genModel) {
+        getLog().debug("==== GenModel state before generation ====");
+        getLog().debug("getGenPackages():");
+        for (GenPackage gp : genModel.getGenPackages()) {
+            dumpGenPackage(gp, "  ");
+        }
+        getLog().debug("getUsedGenPackages():");
+        for (GenPackage gp : genModel.getUsedGenPackages()) {
+            dumpGenPackage(gp, "  ");
+        }
+        getLog().debug("==========================================");
+    }
+
+    private void dumpGenPackage(GenPackage gp, String indent) {
+        EPackage ep = gp.getEcorePackage();
+        String nsURI = ep != null ? ep.getNsURI() : "null";
+        int classifiers = gp.getGenClassifiers().size();
+        Resource res = ep != null ? ep.eResource() : null;
+        getLog().debug(indent + gp.getPackageName() + " (" + nsURI + ") classifiers=" + classifiers
+                + " eResource=" + (res != null ? res.getURI() : "null"));
+        for (GenPackage sub : gp.getSubGenPackages()) {
+            dumpGenPackage(sub, indent + "  ");
+        }
+    }
+
+    private void debugProbeFindGenClassifier(GenModel genModel, EPackage mainEPackage) {
+        getLog().debug("==== Probing findGenClassifier for external EClassifier refs ====");
+        Set<EClassifier> probed = new HashSet<>();
+        probeEPackage(genModel, mainEPackage, probed);
+        getLog().debug("==========================================");
+    }
+
+    private void probeEPackage(GenModel genModel, EPackage ePackage, Set<EClassifier> probed) {
+        String ownNsURI = ePackage.getNsURI();
+        for (EClassifier classifier : ePackage.getEClassifiers()) {
+            if (classifier instanceof EClass eClass) {
+                for (EClass sup : eClass.getESuperTypes()) {
+                    probeOne(genModel, sup, ownNsURI, "supertype of " + eClass.getName(), probed);
+                }
+                for (EStructuralFeature f : eClass.getEStructuralFeatures()) {
+                    EClassifier ft = f.getEType();
+                    if (ft != null) {
+                        probeOne(genModel, ft, ownNsURI, eClass.getName() + "." + f.getName(),
+                                probed);
+                    }
+                }
+            }
+        }
+        for (EPackage sub : ePackage.getESubpackages()) {
+            probeEPackage(genModel, sub, probed);
+        }
+    }
+
+    private void probeOne(GenModel genModel, EClassifier ec, String ownRootNsURI, String origin,
+            Set<EClassifier> probed) {
+        if (!probed.add(ec)) {
+            return;
+        }
+        EPackage ep = ec.getEPackage();
+        String nsURI = ep != null ? ep.getNsURI() : "null";
+        // Manual walk: find a GenClassifier whose getEcoreClassifier() == ec, by name
+        // fallback. This mimics what the EMF codegen does without invoking the
+        // protected findGenClassifier method directly (reflection on it can perturb
+        // the state of large generated packages like CWM during their initial parse).
+        GenPackage manualMatch = null;
+        for (GenPackage gp : genModel.getGenPackages()) {
+            manualMatch = matchClassifier(gp, ec);
+            if (manualMatch != null) {
+                break;
+            }
+        }
+        if (manualMatch == null) {
+            for (GenPackage gp : genModel.getUsedGenPackages()) {
+                manualMatch = matchClassifier(gp, ec);
+                if (manualMatch != null) {
+                    break;
+                }
+            }
+        }
+        getLog().debug("       ref " + origin + " -> " + (ec.getName() == null ? "null" : ec.getName())
+                + " in " + nsURI
+                + " instanceTypeName=" + ec.getInstanceTypeName()
+                + " manualMatch=" + (manualMatch != null ? manualMatch.getPackageName() : "NONE"));
+    }
+
+    private GenPackage matchClassifier(GenPackage gp, EClassifier ec) {
+        EPackage gpEP = gp.getEcorePackage();
+        if (gpEP != null && ec.getEPackage() != null
+                && gpEP.getNsURI().equals(ec.getEPackage().getNsURI())) {
+            for (GenClassifier gc : gp.getGenClassifiers()) {
+                if (gc.getEcoreClassifier() == ec) {
+                    return gp;
+                }
+            }
+            // EClassifier may be a different instance with same name
+            for (GenClassifier gc : gp.getGenClassifiers()) {
+                if (gc.getEcoreClassifier() != null
+                        && ec.getName() != null
+                        && ec.getName().equals(gc.getEcoreClassifier().getName())) {
+                    EClassifier other = gc.getEcoreClassifier();
+                    Resource ecRes = ec.eResource();
+                    Resource otherRes = other.eResource();
+                    getLog().warn("    IDENTITY MISMATCH for " + ec.getName()
+                            + ": ec@" + System.identityHashCode(ec) + " in "
+                            + (ecRes != null ? ecRes.getURI() : "null")
+                            + " vs GenClassifier.ec@" + System.identityHashCode(other)
+                            + " in " + (otherRes != null ? otherRes.getURI() : "null"));
+                    return gp;
+                }
+            }
+        }
+        for (GenPackage sub : gp.getSubGenPackages()) {
+            GenPackage m = matchClassifier(sub, ec);
+            if (m != null) {
+                return m;
+            }
+        }
+        return null;
+    }
+
     private void deleteDirectory(File dir) {
         if (dir.isDirectory()) {
             File[] files = dir.listFiles();
