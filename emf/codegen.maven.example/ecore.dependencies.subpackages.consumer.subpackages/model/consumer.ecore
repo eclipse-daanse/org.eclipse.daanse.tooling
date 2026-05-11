@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="consumer"
+    nsURI="http://daanse.eclipse.org/example/consumer.subpackages" nsPrefix="consumer">
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="basePackage" value="org.eclipse.daanse.example.consumer"/>
+    <details key="prefix" value="Consumer"/>
+  </eAnnotations>
+  <eSubpackages name="processing" nsURI="http://daanse.eclipse.org/example/consumer.subpackages/processing"
+      nsPrefix="processing">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="basePackage" value="org.eclipse.daanse.example.consumer"/>
+      <details key="prefix" value="Processing"/>
+    </eAnnotations>
+    <eClassifiers xsi:type="ecore:EClass" name="ProcessingRecord">
+      <eStructuralFeatures xsi:type="ecore:EAttribute" name="name"
+          eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      <!-- Reference into nested.ecore's a/Alpha (one subpackage deep).
+           URI part = root nsURI; fragment is the path FROM the resource root
+           (nested EPackage), navigating into subpackages.  -->
+      <eStructuralFeatures xsi:type="ecore:EReference" name="seedAlpha"
+          eType="ecore:EClass http://daanse.eclipse.org/example/nested#//a/Alpha"/>
+      <!-- Reference into nested.ecore's a/b/Beta (two subpackages deep) -->
+      <eStructuralFeatures xsi:type="ecore:EReference" name="seedBeta"
+          eType="ecore:EClass http://daanse.eclipse.org/example/nested#//a/b/Beta"
+          containment="true"/>
+    </eClassifiers>
+  </eSubpackages>
+  <eSubpackages name="assessment" nsURI="http://daanse.eclipse.org/example/consumer.subpackages/assessment"
+      nsPrefix="assessment">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="basePackage" value="org.eclipse.daanse.example.consumer"/>
+      <details key="prefix" value="Assessment"/>
+    </eAnnotations>
+    <eClassifiers xsi:type="ecore:EClass" name="Assessment">
+      <eStructuralFeatures xsi:type="ecore:EAttribute" name="title"
+          eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      <!-- Sibling-subpackage cross-ref into our own processing/ProcessingRecord
+           (mirrors gdpr's processing<->assessment cross-references) -->
+      <eStructuralFeatures xsi:type="ecore:EReference" name="record"
+          eType="#//processing/ProcessingRecord"/>
+      <!-- Also reference an external nested type to mirror gdpr's mixed pattern -->
+      <eStructuralFeatures xsi:type="ecore:EReference" name="dependency"
+          eType="ecore:EClass http://daanse.eclipse.org/example/nested#//a/b/Beta"/>
+    </eClassifiers>
+  </eSubpackages>
+</ecore:EPackage>
