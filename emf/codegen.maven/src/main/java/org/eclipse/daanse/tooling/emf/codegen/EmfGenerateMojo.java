@@ -852,6 +852,14 @@ public class EmfGenerateMojo extends AbstractMojo {
             // URI during subsequent code-generation.
             GenModel externalModel = GenModelFactory.eINSTANCE.createGenModel();
             externalModel.setModelName("External");
+            // Inherit the main genmodel's complianceLevel. Without this, the new
+            // external GenModel defaults to JDK14, and EMF emits cross-package
+            // EEnumLiteral references in the legacy "<NAME>_LITERAL" form (see
+            // GenEnumLiteralImpl.getEnumLiteralInstanceConstantName, which appends
+            // _LITERAL when complianceLevel < JDK50). The producing module's
+            // generated enum class only has the modern "<NAME>" constant, so
+            // consumer code fails to compile with "cannot find symbol PUBLIC_LITERAL".
+            externalModel.setComplianceLevel(genModel.getComplianceLevel());
             String ecoreName = ecoreFile.getName();
             String baseName = ecoreName.endsWith(".ecore")
                 ? ecoreName.substring(0, ecoreName.length() - 6)
@@ -1573,6 +1581,11 @@ public class EmfGenerateMojo extends AbstractMojo {
             GenModel genModel = GenModelFactory.eINSTANCE.createGenModel();
             genModel.initialize(Collections.singletonList(ePackage));
             genModel.setModelName(capitalize(ePackage.getName()));
+            // Match the main genmodel's complianceLevel (set in createGenModel).
+            // The default JDK14 would trigger legacy "<NAME>_LITERAL" emission for
+            // any cross-package EEnum default values when this synthesized
+            // GenPackage is consumed by another module's generator.
+            genModel.setComplianceLevel(org.eclipse.emf.codegen.ecore.genmodel.GenJDKLevel.JDK170_LITERAL);
 
             // Create a synthetic resource for the GenModel
             URI genModelUri = URI.createURI("synthetic:/" + ePackage.getName() + ".genmodel");
